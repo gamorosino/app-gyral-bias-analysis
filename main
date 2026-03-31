@@ -1,77 +1,104 @@
 #!/bin/bash
 set -euo pipefail
 
-[ -z "${FREESURFER_LICENSE:-}" ] && echo "[ERROR] FREESURFER_LICENSE env var is not set" && exit 1
-printf "%s\n" "$FREESURFER_LICENSE" > /tmp/license.txt
-WORK=/tmp/work_gyral_bias
-mkdir -p "$WORK/surf2vol"
 CONFIG=/input/config.json
+WORK=/tmp/work_gyral_bias
 
 if [[ ! -f "$CONFIG" ]]; then
   echo "[ERROR] Missing /input/config.json"
   exit 1
 fi
 
-# read json with python (jq not guaranteed)
+# Read values from config.json via python and export them for bash
+eval "$(
 python3 - <<'PY'
-import json, os, sys, subprocess
+import json, shlex
 from pathlib import Path
 
-cfg_path = Path("/input/config.json")
-cfg = json.loads(cfg_path.read_text())
+cfg = json.loads(Path("/input/config.json").read_text())
 
-def get(key, default=None):
+def get(key, default=""):
     v = cfg.get(key, default)
     if isinstance(v, str) and v.strip() == "":
-        return default
+        return ""
     return v
 
 parc = get("parc")
 label = get("label")
 tcks = get("tcks")
-fs_output = get("output")  # FreeSurfer SUBJECT dir (contains mri/ surf/)
+fs_output = get("output")
 
-visual_area_a = get("visual_area_a", "")
-visual_area_b = get("visual_area_b", "")
+visual_area_a = get("visual_area_a")
+visual_area_b = get("visual_area_b")
 roi_order = bool(cfg.get("roi_order", False))
-parc_vareas = get("parc_vareas", None)
+parc_vareas = get("parc_vareas")
 
 missing = [k for k,v in [("parc",parc),("label",label),("tcks",tcks),("output",fs_output)] if not v]
 if missing:
-    print(f"[ERROR] Missing required config keys: {missing}", file=sys.stderr)
-    sys.exit(1)
+    raise SystemExit(f"[ERROR] Missing required config keys: {missing}")
 
-# Fail-fast rule if filtering requested
 filtering_requested = bool(visual_area_a) or bool(visual_area_b) or roi_order
 if filtering_requested and not parc_vareas:
-    print("[ERROR] visual area filtering requested (visual_area_a/visual_area_b/roi_order), but parc_vareas is missing.", file=sys.stderr)
-    sys.exit(1)
+    raise SystemExit("[ERROR] visual area filtering requested (visual_area_a/visual_area_b/roi_order), but parc_vareas is missing.")
 
+def exp(name, value):
+    print(f'export {name}={shlex.quote(str(value))}')
+
+exp("PARC", parc)
+exp("LABEL", label)
+exp("TCKS", tcks)
+exp("FS_OUTPUT", fs_output)
+exp("VISUAL_AREA_A", visual_area_a)
+exp("VISUAL_AREA_B", visual_area_b)
+exp("PARC_VAREAS", parc_vareas)
+
+print(f"export ROI_ORDER={'1' if roi_order else '0'}")
+PY
+)"
+
+mkdir -p "$WORK/surf2vol"
+
+# If we need FreeSurfer step, require license + run freesurfer container
+# (We always run it here since you want stand-alone FS step.)
+if [[ -z "${FREESURFER_LICENSE:-}" ]]; then
+  echo "[ERROR] FREESURFER_LICENSE env var is not set"
+  exit 1
+fi
+printf "%s\n" "$FREESURFER_LICENSE" > "$WORK/license.txt"
+
+echo "[INFO] Running FreeSurfer mri_surf2vol inside brainlife/freesurfer:7.3.2"
 singularity exec -e \
-  -B /tmp/license.txt:/usr/local/freesurfer/license.txt \
-  -B "$fs_output":/fs \
+  -B "$WORK/license.txt":/usr/local/freesurfer/license.txt \
+  -B "$FS_OUTPUT":/fs \
   -B "$WORK":/work \
   docker://brainlife/freesurfer:7.3.2 \
   /bin/bash -lc "/work/freesurfer.sh /fs /work/surf2vol"
 
-# Build command
-cmd = [
-  "python3", "/opt/app/analyze_gyral_bias_app.py",
-  "--parc", parc,
-  "--label_json", label,
-  "--tcks_dir", tcks,
-  "--freesurfer_dir", fs_output,
-  "--output_csv", "/output/curvature_streamlines.csv",
-  "--visual_area_a", visual_area_a,
-  "--visual_area_b", visual_area_b,
-]
-if parc_vareas:
-    cmd += ["--parc_vareas", parc_vareas]
-if roi_order:
-    cmd += ["--roi_order"]
+LH_CURV="$WORK/surf2vol/lh.curv.mgz"
+RH_CURV="$WORK/surf2vol/rh.curv.mgz"
 
-print("[INFO] Running:", " ".join(cmd), flush=True)
-subprocess.run(cmd, check=True)
-PY
+[[ ! -f "$LH_CURV" ]] && echo "[ERROR] Missing expected $LH_CURV" && exit 1
+[[ ! -f "$RH_CURV" ]] && echo "[ERROR] Missing expected $RH_CURV" && exit 1
+
+CMD=(python3 /opt/app/analyze_gyral_bias_app.py
+  --parc "$PARC"
+  --label_json "$LABEL"
+  --tcks_dir "$TCKS"
+  --lh_curv "$LH_CURV"
+  --rh_curv "$RH_CURV"
+  --output_csv /output/curvature_streamlines.csv
+  --visual_area_a "$VISUAL_AREA_A"
+  --visual_area_b "$VISUAL_AREA_B"
+)
+
+if [[ -n "${PARC_VAREAS:-}" ]]; then
+  CMD+=(--parc_vareas "$PARC_VAREAS")
+fi
+if [[ "$ROI_ORDER" == "1" ]]; then
+  CMD+=(--roi_order)
+fi
+
+echo "[INFO] Running: ${CMD[*]}"
+"${CMD[@]}"
 
 echo "[INFO] Done. Output: /output/curvature_streamlines.csv"
