@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-CONFIG=/input/config.json
+CONFIG=./config.json
 WORK=/tmp/work_gyral_bias
 
 if [[ ! -f "$CONFIG" ]]; then
