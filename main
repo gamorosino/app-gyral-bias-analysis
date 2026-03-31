@@ -3,7 +3,7 @@ set -euo pipefail
 
 CONFIG=./config.json
 WORK=/tmp/work_gyral_bias
-
+APPDIR=./
 if [[ ! -f "$CONFIG" ]]; then
   echo "[ERROR] Missing ./config.json"
   exit 1
