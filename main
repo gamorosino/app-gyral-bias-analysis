@@ -15,7 +15,7 @@ python3 - <<'PY'
 import json, shlex
 from pathlib import Path
 
-cfg = json.loads(Path("/input/config.json").read_text())
+cfg = json.loads(Path("./config.json").read_text())
 
 def get(key, default=""):
     v = cfg.get(key, default)
