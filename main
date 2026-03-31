@@ -5,7 +5,7 @@ CONFIG=./config.json
 WORK=/tmp/work_gyral_bias
 
 if [[ ! -f "$CONFIG" ]]; then
-  echo "[ERROR] Missing /input/config.json"
+  echo "[ERROR] Missing ./config.json"
   exit 1
 fi
 
@@ -58,13 +58,15 @@ PY
 
 mkdir -p "$WORK/surf2vol"
 
-# If we need FreeSurfer step, require license + run freesurfer container
-# (We always run it here since you want stand-alone FS step.)
 if [[ -z "${FREESURFER_LICENSE:-}" ]]; then
   echo "[ERROR] FREESURFER_LICENSE env var is not set"
   exit 1
 fi
 printf "%s\n" "$FREESURFER_LICENSE" > "$WORK/license.txt"
+
+# make sure helper script is available inside the FreeSurfer container
+cp "$APPDIR/freesurfer.sh" "$WORK/freesurfer.sh"
+chmod +x "$WORK/freesurfer.sh"
 
 echo "[INFO] Running FreeSurfer mri_surf2vol inside brainlife/freesurfer:7.3.2"
 singularity exec -e \
