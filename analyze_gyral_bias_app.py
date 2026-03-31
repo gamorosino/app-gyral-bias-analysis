@@ -229,11 +229,18 @@ def main():
     # prepare curvature
     work = Path("/tmp/work_gyral_bias")
     work.mkdir(parents=True, exist_ok=True)
-    surf2vol_dir = work / "surf2vol"
-    surf2vol_dir.mkdir(exist_ok=True, parents=True)
-
-    lh_curv = run_surf2vol(freesurfer_dir, "lh", surf2vol_dir)
-    rh_curv = run_surf2vol(freesurfer_dir, "rh", surf2vol_dir)
+    
+    if args.lh_curv and args.rh_curv:
+        lh_curv = Path(args.lh_curv).resolve()
+        rh_curv = Path(args.rh_curv).resolve()
+    else:
+        if not args.freesurfer_dir:
+            raise SystemExit("[ERROR] Provide either --lh_curv/--rh_curv or --freesurfer_dir")
+        freesurfer_dir = Path(args.freesurfer_dir).resolve()
+        surf2vol_dir = work / "surf2vol"
+        surf2vol_dir.mkdir(exist_ok=True, parents=True)
+        lh_curv = run_surf2vol(freesurfer_dir, "lh", surf2vol_dir)
+        rh_curv = run_surf2vol(freesurfer_dir, "rh", surf2vol_dir)
 
     # unpack parc into masks
     ecc_masks_dir = work / "ecc_polar"
