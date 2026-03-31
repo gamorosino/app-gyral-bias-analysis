@@ -1,6 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
+[ -z "${FREESURFER_LICENSE:-}" ] && echo "[ERROR] FREESURFER_LICENSE env var is not set" && exit 1
+printf "%s\n" "$FREESURFER_LICENSE" > /tmp/license.txt
+WORK=/tmp/work_gyral_bias
+mkdir -p "$WORK/surf2vol"
 CONFIG=/input/config.json
 
 if [[ ! -f "$CONFIG" ]]; then
@@ -42,6 +46,13 @@ filtering_requested = bool(visual_area_a) or bool(visual_area_b) or roi_order
 if filtering_requested and not parc_vareas:
     print("[ERROR] visual area filtering requested (visual_area_a/visual_area_b/roi_order), but parc_vareas is missing.", file=sys.stderr)
     sys.exit(1)
+
+singularity exec -e \
+  -B /tmp/license.txt:/usr/local/freesurfer/license.txt \
+  -B "$fs_output":/fs \
+  -B "$WORK":/work \
+  docker://brainlife/freesurfer:7.3.2 \
+  /bin/bash -lc "/work/freesurfer.sh /fs /work/surf2vol"
 
 # Build command
 cmd = [
