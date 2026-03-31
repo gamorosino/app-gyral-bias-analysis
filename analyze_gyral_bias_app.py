@@ -202,7 +202,14 @@ def main():
     ap.add_argument("--parc", required=True)
     ap.add_argument("--label_json", required=True)
     ap.add_argument("--tcks_dir", required=True)
-    ap.add_argument("--freesurfer_dir", required=True)
+    
+    # Either provide these (recommended for stand-alone FS step)...
+    ap.add_argument("--lh_curv", default="")
+    ap.add_argument("--rh_curv", default="")
+    
+    # ...or provide freesurfer_dir so python can run mri_surf2vol itself (fallback)
+    ap.add_argument("--freesurfer_dir", default="")
+    
     ap.add_argument("--output_csv", required=True)
 
     ap.add_argument("--parc_vareas", default="")
@@ -215,7 +222,6 @@ def main():
     parc = Path(args.parc).resolve()
     label_json = Path(args.label_json).resolve()
     tcks_dir = Path(args.tcks_dir).resolve()
-    freesurfer_dir = Path(args.freesurfer_dir).resolve()
     output_csv = Path(args.output_csv).resolve()
     output_csv.parent.mkdir(parents=True, exist_ok=True)
 
@@ -230,11 +236,16 @@ def main():
     work = Path("/tmp/work_gyral_bias")
     work.mkdir(parents=True, exist_ok=True)
     
-    if args.lh_curv and args.rh_curv:
-        lh_curv = Path(args.lh_curv).resolve()
-        rh_curv = Path(args.rh_curv).resolve()
+    lh_arg = args.lh_curv.strip()
+    rh_arg = args.rh_curv.strip()
+    
+    if lh_arg or rh_arg:
+        if not (lh_arg and rh_arg):
+            raise SystemExit("[ERROR] If providing curvature files, provide BOTH --lh_curv and --rh_curv")
+        lh_curv = Path(lh_arg).resolve()
+        rh_curv = Path(rh_arg).resolve()
     else:
-        if not args.freesurfer_dir:
+        if not args.freesurfer_dir.strip():
             raise SystemExit("[ERROR] Provide either --lh_curv/--rh_curv or --freesurfer_dir")
         freesurfer_dir = Path(args.freesurfer_dir).resolve()
         surf2vol_dir = work / "surf2vol"
@@ -242,6 +253,10 @@ def main():
         lh_curv = run_surf2vol(freesurfer_dir, "lh", surf2vol_dir)
         rh_curv = run_surf2vol(freesurfer_dir, "rh", surf2vol_dir)
 
+
+    if not lh_curv.exists(): raise FileNotFoundError(lh_curv)
+    if not rh_curv.exists(): raise FileNotFoundError(rh_curv)
+        
     # unpack parc into masks
     ecc_masks_dir = work / "ecc_polar"
     unpack_segmentation(parc, ecc_masks_dir, "parc")
