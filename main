@@ -69,12 +69,12 @@ cp "$APPDIR/freesurfer.sh" "$WORK/freesurfer.sh"
 chmod +x "$WORK/freesurfer.sh"
 
 echo "[INFO] Running FreeSurfer mri_surf2vol inside brainlife/freesurfer:7.3.2"
-singularity exec -e \
-  -B "$WORK/license.txt":/usr/local/freesurfer/license.txt \
-  -B "$FS_OUTPUT":/fs \
-  -B "$WORK":/work \
-  docker://brainlife/freesurfer:7.3.2 \
-  /bin/bash -lc "/work/freesurfer.sh /fs /work/surf2vol"
+
+[ -z "$FREESURFER_LICENSE" ] && echo "Please set FREESURFER_LICENSE in .bashrc" && exit 1;
+echo $FREESURFER_LICENSE > license.txt
+
+time singularity exec -e -B `pwd`/license.txt:/usr/local/freesurfer/license.txt \
+  docker://brainlife/freesurfer:7.3.2 "./freesurfer.sh" "$FS_OUTPUT" "$FS_OUTPUT"
 
 LH_CURV="$WORK/surf2vol/lh.curv.mgz"
 RH_CURV="$WORK/surf2vol/rh.curv.mgz"
