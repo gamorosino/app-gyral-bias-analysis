@@ -13,7 +13,6 @@ For each parcel, the app computes:
 * Total streamline count
 * Filtered streamline count (optional)
 * Streamline density (filtered / volume)
-* 
 ---
 ## Author
 
@@ -145,6 +144,6 @@ If curvature files are not provided, they are generated from FreeSurfer using `m
 
 ## Dependencies
 
-* FreeSurfer
-* MRtrix3 (`tckinfo`, `tckedit`)
-* Dipy
+* Fischl, B. (2012). FreeSurfer. Neuroimage, 62(2), 774-781.
+* Tournier, J. D., et al. (2019). MRtrix3: A fast, flexible and open software framework for medical image processing and visualisation. Neuroimage, 202, 116137.
+* Garyfallidis, E., et al. (2014). Dipy, a library for the analysis of diffusion MRI data. Frontiers in neuroinformatics, 8, 8.
