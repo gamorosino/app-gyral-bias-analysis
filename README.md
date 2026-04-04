@@ -16,7 +16,7 @@ For each parcel, the app computes:
 ---
 ## Author
 
-Gabriele amorosino (g.amorosino@gmail.com)
+Gabriele Amorosino (g.amorosino@gmail.com)
 
 ---
 
