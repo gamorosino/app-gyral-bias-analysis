@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
-
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONTAINER_IMAGE="docker://gamorosino/tract_align:v1.0"
 CONFIG=./config.json
 WORK=/tmp/work_gyral_bias
 APPDIR=./
@@ -22,6 +23,14 @@ def get(key, default=""):
     if isinstance(v, str) and v.strip() == "":
         return ""
     return v
+
+
+
+run_in_env() {
+        singularity exec -e \
+            "${CONTAINER_IMAGE}" \
+                micromamba run -n tract_align "$@"
+    }
 
 parc = get("parc")
 label = get("label")
@@ -82,7 +91,7 @@ RH_CURV="$WORK/surf2vol/rh.curv.mgz"
 [[ ! -f "$LH_CURV" ]] && echo "[ERROR] Missing expected $LH_CURV" && exit 1
 [[ ! -f "$RH_CURV" ]] && echo "[ERROR] Missing expected $RH_CURV" && exit 1
 
-CMD=(python3 /opt/app/analyze_gyral_bias_app.py
+CMD=(python3 ${SCRIPT_DIR}/analyze_gyral_bias_app.py
   --parc "$PARC"
   --label_json "$LABEL"
   --tcks_dir "$TCKS"
