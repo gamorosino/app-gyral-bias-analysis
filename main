@@ -1,4 +1,8 @@
 #!/bin/bash
+#PBS -l nodes=1:ppn=1,vmem=16g,walltime=2:00:00
+#PBS -N app-gyral-bias-analysis
+#PBS -V
+
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTAINER_IMAGE="docker://gamorosino/tract_align:v1.0"
