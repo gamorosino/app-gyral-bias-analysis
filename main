@@ -1,5 +1,5 @@
 #!/bin/bash
-#PBS -l nodes=1:ppn=1,vmem=16g,walltime=2:00:00
+#PBS -l nodes=1:ppn=1,vmem=8g,walltime=1:00:00
 #PBS -N app-gyral-bias-analysis
 #PBS -V
 
