@@ -13,6 +13,19 @@ from dipy.io.streamline import load_tck
 from dipy.io.stateful_tractogram import StatefulTractogram, Space
 from dipy.io.streamline import save_tck
 
+from analyze_group_gyral_bias import (
+    get_meridian_map,
+    get_ecc_map,
+    prepare_subject_means,
+    transform_meridians,
+    plot_comprehensive_box_curvature,
+    plot_comprehensive_centroid_scatter,
+    plot_box_curvature_by_meridian_per_ecc,
+    plot_scatter_density_vs_curvature_per_ecc,
+    plot_meridian_centroids,
+    plot_meridian_centroids_x,
+    plot_meridian_modelling,
+)
 
 VAREA_MAP = {
     "V1": 1, "V2": 2, "V3": 3, "hV4": 4, "VO1": 5, "VO2": 6,
@@ -346,6 +359,19 @@ def main():
     pd.DataFrame(rows).to_csv(output_csv, index=False)
     print(f"[INFO] Wrote {output_csv}")
 
-
+    if args.make_plots:
+        df_plot = pd.DataFrame(rows).copy()
+        df_plot["subject"] = args.subject_id
+        df_plot["streamline_count"] = df_plot["streamline_count_filtered"]
+        df_plot["streamline_density"] = df_plot["streamline_density_filtered"]
+    
+        meridian_map = get_meridian_map()
+        ecc_map = get_ecc_map()
+        df_plot["meridian"] = df_plot["parcel_id"].map(meridian_map)
+        df_plot["eccentricity_bin"] = df_plot["parcel_id"].map(ecc_map)
+    
+        subj_means = prepare_subject_means(df_plot, meridians=["LHM", "RHM", "LVM", "UVM"])
+        plot_comprehensive_box_curvature(subj_means, output_csv.parent / "boxplot.png")
+        
 if __name__ == "__main__":
     main()
