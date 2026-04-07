@@ -328,6 +328,7 @@ def main():
         streamline_density_filtered = (streamline_count_filtered / parcel_volume) if parcel_volume > 0 else np.nan
 
         rows.append({
+            "subject": subject_id,
             "parcel_id": parcel_id,
             "parcel_name": label_map.get(parcel_id, f"parc_{parcel_id}"),
             "hemi": hemi,
