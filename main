@@ -4,6 +4,7 @@
 #PBS -V
 
 set -euo pipefail
+set -x
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTAINER_IMAGE="docker://gamorosino/tract_align:v1.0"
 CONFIG=${SCRIPT_DIR}/config.json
@@ -84,7 +85,7 @@ echo "[INFO] Running FreeSurfer mri_surf2vol inside brainlife/freesurfer:7.3.2"
 [ -z "$FREESURFER_LICENSE" ] && echo "Please set FREESURFER_LICENSE in .bashrc" && exit 1;
 echo $FREESURFER_LICENSE > license.txt
 
-time singularity exec -e -B `pwd`/license.txt:/usr/local/freesurfer/license.txt \
+time singularity exec --debug -e -B `pwd`/license.txt:/usr/local/freesurfer/license.txt \
   docker://brainlife/freesurfer:7.3.2 "./freesurfer.sh" "$FS_OUTPUT" "$FS_OUTPUT"
 
 LH_CURV="$WORK/surf2vol/lh.curv.mgz"
