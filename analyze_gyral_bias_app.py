@@ -229,7 +229,14 @@ def main():
     ap.add_argument("--visual_area_a", default="")
     ap.add_argument("--visual_area_b", default="")
     ap.add_argument("--roi_order", action="store_true")
-
+    ap.add_argument("--make_plots", action="store_true",
+                        help="Generate plots from the computed metrics")
+    
+    ap.add_argument("--subject_id", type=str, default="sub-unknown",
+                        help="Subject identifier for plotting")
+    
+    ap.add_argument("--plots_dir", type=str, default="plots",
+                        help="Directory to save plots")
     args = ap.parse_args()
 
     parc = Path(args.parc).resolve()
@@ -360,18 +367,43 @@ def main():
     print(f"[INFO] Wrote {output_csv}")
 
     if args.make_plots:
+        print("[INFO] Generating plots...")
+    
+        import pandas as pd
+        from pathlib import Path
+    
         df_plot = pd.DataFrame(rows).copy()
+    
+        # ---- standardize columns for plotting code ----
         df_plot["subject"] = args.subject_id
         df_plot["streamline_count"] = df_plot["streamline_count_filtered"]
         df_plot["streamline_density"] = df_plot["streamline_density_filtered"]
     
+        # ---- add meridian + eccentricity ----
         meridian_map = get_meridian_map()
         ecc_map = get_ecc_map()
+    
         df_plot["meridian"] = df_plot["parcel_id"].map(meridian_map)
         df_plot["eccentricity_bin"] = df_plot["parcel_id"].map(ecc_map)
     
-        subj_means = prepare_subject_means(df_plot, meridians=["LHM", "RHM", "LVM", "UVM"])
-        plot_comprehensive_box_curvature(subj_means, output_csv.parent / "boxplot.png")
-        
+        # ---- output directory ----
+        plots_dir = Path(args.plots_dir)
+        plots_dir.mkdir(parents=True, exist_ok=True)
+    
+        # ---- subject-level aggregation ----
+        subj_means = prepare_subject_means(
+            df_plot,
+            meridians=["LHM", "RHM", "LVM", "UVM"]
+        )
+    
+        # ---- example plot ----
+        out_path = plots_dir / "curvature_boxplot.png"
+    
+        try:
+            plot_comprehensive_box_curvature(subj_means, out_path)
+            print(f"[INFO] Saved plot: {out_path}")
+        except Exception as e:
+            print(f"[WARNING] Plot generation failed: {e}")
+            
 if __name__ == "__main__":
     main()
