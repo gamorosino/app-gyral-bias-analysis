@@ -287,7 +287,10 @@ def main():
 
     rows = []
     for parc_file in sorted(ecc_masks_dir.glob("parc_*.nii.gz")):
-        parcel_id = int(parc_file.stem.split("_")[-1])
+        m = re.search(r"parc_(\d+)", parc_file.name)
+        if not m:
+            raise RuntimeError(f"[ERROR] Cannot parse parcel_id from {parc_file}")
+        parcel_id = int(m.group(1))
         hemi = "lh" if parcel_id % 2 == 1 else "rh"
         curv_file = lh_curv if hemi == "lh" else rh_curv
 
