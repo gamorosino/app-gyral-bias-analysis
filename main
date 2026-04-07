@@ -86,7 +86,7 @@ echo "[INFO] Running FreeSurfer mri_surf2vol inside brainlife/freesurfer:7.3.2"
 echo $FREESURFER_LICENSE > license.txt
 
 time singularity  --debug  exec -e -B `pwd`/license.txt:/usr/local/freesurfer/license.txt \
-  docker://brainlife/freesurfer:7.3.2 "./freesurfer.sh" "$FS_OUTPUT" "$WORK/surf2vol"
+  docker://brainlife/freesurfer:7.3.2 bash "./freesurfer.sh" "$FS_OUTPUT" "$WORK/surf2vol"
 
 LH_CURV="$WORK/surf2vol/lh.curv.mgz"
 RH_CURV="$WORK/surf2vol/rh.curv.mgz"
