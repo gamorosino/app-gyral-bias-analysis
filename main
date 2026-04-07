@@ -29,17 +29,35 @@ def get(key, default=""):
         return ""
     return v
 
+def get_subject_id(cfg):
+    for item in cfg.get("_inputs", []):
+        subj = item.get("meta", {}).get("subject")
+        if subj:
+            return subj
+    for item in cfg.get("_outputs", []):
+        subj = item.get("meta", {}).get("subject")
+        if subj:
+            return subj
+    return ""
+
 parc = get("parc")
 label = get("label")
 tcks = get("tcks")
 fs_output = get("output")
+subject_id = get_subject_id(cfg)
 
 visual_area_a = get("visual_area_a")
 visual_area_b = get("visual_area_b")
 roi_order = bool(cfg.get("roi_order", False))
 parc_vareas = get("parc_vareas")
 
-missing = [k for k,v in [("parc",parc),("label",label),("tcks",tcks),("output",fs_output)] if not v]
+missing = [k for k,v in [
+    ("parc", parc),
+    ("label", label),
+    ("tcks", tcks),
+    ("output", fs_output),
+    ("subject_id", subject_id),
+] if not v]
 if missing:
     raise SystemExit(f"[ERROR] Missing required config keys: {missing}")
 
@@ -54,6 +72,7 @@ exp("PARC", parc)
 exp("LABEL", label)
 exp("TCKS", tcks)
 exp("FS_OUTPUT", fs_output)
+exp("SUBJECT_ID", subject_id)
 exp("VISUAL_AREA_A", visual_area_a)
 exp("VISUAL_AREA_B", visual_area_b)
 exp("PARC_VAREAS", parc_vareas)
@@ -103,6 +122,9 @@ CMD=(python3 ${SCRIPT_DIR}/analyze_gyral_bias_app.py
   --output_csv ${SCRIPT_DIR}/output/curvature_streamlines.csv
   --visual_area_a "$VISUAL_AREA_A"
   --visual_area_b "$VISUAL_AREA_B"
+  --make_plots
+  --subject_id "$SUBJECT_ID"
+  --plots_dir ${SCRIPT_DIR}/plots
 )
 
 if [[ -n "${PARC_VAREAS:-}" ]]; then
@@ -116,3 +138,5 @@ echo "[INFO] Running: ${CMD[*]}"
 run_in_env "${CMD[@]}"
 
 echo "[INFO] Done. Output: /output/curvature_streamlines.csv"
+
+bash ./generate_product_json.sh "${SCRIPT_DIR}/plots/" "${SCRIPT_DIR}/product.json"
