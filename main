@@ -1,5 +1,5 @@
 #!/bin/bash
-#PBS -l nodes=1:ppn=1,vmem=8g,walltime=1:00:00
+#PBS -l nodes=1:ppn=1,vmem=8g,walltime=3:00:00
 #PBS -N app-gyral-bias-analysis
 #PBS -V
 
@@ -63,7 +63,7 @@ PY
 )"
 
 run_in_env() {
-        singularity exec -e \
+        singularity exec -e  --debug  \
             "${CONTAINER_IMAGE}" \
                 micromamba run -n tract_align "$@"
     }
@@ -86,7 +86,7 @@ echo "[INFO] Running FreeSurfer mri_surf2vol inside brainlife/freesurfer:7.3.2"
 echo $FREESURFER_LICENSE > license.txt
 
 time singularity exec --debug -e -B `pwd`/license.txt:/usr/local/freesurfer/license.txt \
-  docker://brainlife/freesurfer:7.3.2 "./freesurfer.sh" "$FS_OUTPUT" "$FS_OUTPUT"
+  docker://brainlife/freesurfer:7.3.2 "./freesurfer.sh" "$FS_OUTPUT" "$WORK/surf2vol"
 
 LH_CURV="$WORK/surf2vol/lh.curv.mgz"
 RH_CURV="$WORK/surf2vol/rh.curv.mgz"
@@ -113,6 +113,6 @@ if [[ "$ROI_ORDER" == "1" ]]; then
 fi
 
 echo "[INFO] Running: ${CMD[*]}"
-"${CMD[@]}"
+run_in_env "${CMD[@]}"
 
 echo "[INFO] Done. Output: /output/curvature_streamlines.csv"
