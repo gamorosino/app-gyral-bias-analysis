@@ -31,13 +31,16 @@ def get(key, default=""):
 
 def get_subject_id(cfg):
     for item in cfg.get("_inputs", []):
-        subj = item.get("meta", {}).get("subject")
-        if subj:
-            return subj
-    for item in cfg.get("_outputs", []):
-        subj = item.get("meta", {}).get("subject")
-        if subj:
-            return subj
+        if item.get("id") == "freesurfer":
+            subj = (item.get("meta") or {}).get("subject")
+            if subj is not None and str(subj).strip():
+                return str(subj).strip()
+
+    for section in ("_inputs", "_outputs"):
+        for item in cfg.get(section, []):
+            subj = (item.get("meta") or {}).get("subject")
+            if subj is not None and str(subj).strip():
+                return str(subj).strip()
     return ""
 
 parc = get("parc")
