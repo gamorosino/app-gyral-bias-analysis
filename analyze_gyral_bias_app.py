@@ -3,8 +3,7 @@ import json
 import os
 import re
 import subprocess
-from pathlib import Path
-
+from pathlib import Path   
 import nibabel as nib
 import numpy as np
 import pandas as pd
@@ -369,9 +368,7 @@ def main():
     if args.make_plots:
         print("[INFO] Generating plots...")
     
-        import pandas as pd
-        from pathlib import Path
-    
+
         df_plot = pd.DataFrame(rows).copy()
     
         # ---- standardize columns for plotting code ----
