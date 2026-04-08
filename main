@@ -82,7 +82,7 @@ PY
 )"
 
 run_in_env() {
-        singularity  --debug  exec -e \
+        singularity  exec -e \
             "${CONTAINER_IMAGE}" \
                 micromamba run -n tract_align "$@"
     }
@@ -104,7 +104,7 @@ echo "[INFO] Running FreeSurfer mri_surf2vol inside brainlife/freesurfer:7.3.2"
 [ -z "$FREESURFER_LICENSE" ] && echo "Please set FREESURFER_LICENSE in .bashrc" && exit 1;
 echo $FREESURFER_LICENSE > license.txt
 
-time singularity  --debug  exec -e -B `pwd`/license.txt:/usr/local/freesurfer/license.txt \
+time singularity   exec -e -B `pwd`/license.txt:/usr/local/freesurfer/license.txt \
   docker://brainlife/freesurfer:7.3.2 bash "./freesurfer.sh" "$FS_OUTPUT" "$WORK/surf2vol"
 
 LH_CURV="$WORK/surf2vol/lh.curv.mgz"
