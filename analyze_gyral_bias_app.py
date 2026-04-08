@@ -31,6 +31,136 @@ VAREA_MAP = {
     "LO1": 7, "LO2": 8, "TO1": 9, "TO2": 10, "V3b": 11, "V3a": 12
 }
 
+def make_single_subject_plots(df, plots_dir):
+
+    plots_dir = Path(plots_dir)
+    plots_dir.mkdir(parents=True, exist_ok=True)
+
+    # Ensure plotting columns exist
+    df = df.copy()
+    df["streamline_count"] = df["streamline_count_filtered"]
+    df["streamline_density"] = df["streamline_density_filtered"]
+
+    df["meridian"] = df["parcel_id"].map(get_meridian_map())
+    df["eccentricity_bin"] = df["parcel_id"].map(get_ecc_map())
+
+    df = df.dropna(subset=["mean_curvature", "streamline_density", "meridian"])
+
+    palette = {
+        "LHM": "#a1d99b",
+        "RHM": "#31a354",
+        "LVM": "#fb1209",
+        "UVM": "#3182bd",
+        "ULO": "#ffcc66",
+        "URO": "#ff9933",
+        "LLO": "#b64b75",
+        "LRO": "#FF007F"
+    }
+
+    # -------------------------------------------------
+    # 1. MAIN SCATTER (density vs curvature)
+    # -------------------------------------------------
+
+    plt.figure(figsize=(7,5))
+
+    sns.scatterplot(
+        data=df,
+        x="mean_curvature",
+        y="streamline_density",
+        hue="meridian",
+        palette=palette,
+        alpha=0.7,
+        edgecolor="none"
+    )
+
+    plt.axhline(0, linestyle="--", color="gray")
+    plt.axvline(0, linestyle="--", color="gray")
+
+    plt.xlabel("Mean curvature")
+    plt.ylabel("Streamline density")
+    plt.title("Streamline density vs curvature (parcel-level)")
+    plt.tight_layout()
+
+    save_figure(plots_dir / "scatter_streamline_density_vs_curvature.png", dpi=300)
+    plt.close()
+
+    # -------------------------------------------------
+    # 2. SCATTER BY ECCENTRICITY
+    # -------------------------------------------------
+
+    ecc_order = ["0to2","2to4","4to6","6to8","8to90"]
+
+    for ecc in ecc_order:
+
+        sub = df[df["eccentricity_bin"] == ecc]
+
+        if len(sub) == 0:
+            continue
+
+        plt.figure(figsize=(7,5))
+
+        sns.scatterplot(
+            data=sub,
+            x="mean_curvature",
+            y="streamline_density",
+            hue="meridian",
+            palette=palette,
+            alpha=0.7,
+            edgecolor="none"
+        )
+
+        plt.axhline(0, linestyle="--", color="gray")
+        plt.axvline(0, linestyle="--", color="gray")
+
+        plt.xlabel("Mean curvature")
+        plt.ylabel("Streamline density")
+        plt.title(f"Density vs curvature (eccentricity {ecc})")
+
+        plt.tight_layout()
+
+        save_figure(
+            plots_dir / f"scatter_density_vs_curvature_by_ecc_{ecc}.png",
+            dpi=300
+        )
+
+        plt.close()
+
+    # -------------------------------------------------
+    # 3. BOXPLOT: curvature by meridian
+    # -------------------------------------------------
+
+    for ecc in ecc_order:
+
+        sub = df[df["eccentricity_bin"] == ecc]
+
+        if len(sub) == 0:
+            continue
+
+        plt.figure(figsize=(7,5))
+
+        sns.boxplot(
+            data=sub,
+            x="meridian",
+            y="mean_curvature",
+            palette=palette,
+            showfliers=False
+        )
+
+        plt.axhline(0, color="black")
+
+        plt.xlabel("Meridian")
+        plt.ylabel("Mean curvature")
+        plt.title(f"Curvature distribution by meridian (ecc {ecc})")
+
+        plt.tight_layout()
+
+        save_figure(
+            plots_dir / f"box_mean_curvature_by_meridian_ecc_{ecc}.png",
+            dpi=300
+        )
+
+        plt.close()
+
 
 def load_streamline_count(tck_file: Path) -> int:
     result = subprocess.run(["tckinfo", str(tck_file)], capture_output=True, text=True)
@@ -364,41 +494,30 @@ def main():
 
     pd.DataFrame(rows).to_csv(output_csv, index=False)
     print(f"[INFO] Wrote {output_csv}")
-
+    
     if args.make_plots:
+    
         print("[INFO] Generating plots...")
     
-
         df_plot = pd.DataFrame(rows).copy()
     
-        # ---- standardize columns for plotting code ----
+        # ---- standardize columns for plotting ----
         df_plot["subject"] = args.subject_id
         df_plot["streamline_count"] = df_plot["streamline_count_filtered"]
         df_plot["streamline_density"] = df_plot["streamline_density_filtered"]
     
         # ---- add meridian + eccentricity ----
-        meridian_map = get_meridian_map()
-        ecc_map = get_ecc_map()
-    
-        df_plot["meridian"] = df_plot["parcel_id"].map(meridian_map)
-        df_plot["eccentricity_bin"] = df_plot["parcel_id"].map(ecc_map)
+        df_plot["meridian"] = df_plot["parcel_id"].map(get_meridian_map())
+        df_plot["eccentricity_bin"] = df_plot["parcel_id"].map(get_ecc_map())
     
         # ---- output directory ----
         plots_dir = Path(args.plots_dir)
         plots_dir.mkdir(parents=True, exist_ok=True)
     
-        # ---- subject-level aggregation ----
-        subj_means = prepare_subject_means(
-            df_plot,
-            meridians=["LHM", "RHM", "LVM", "UVM"]
-        )
-    
-        # ---- example plot ----
-        out_path = plots_dir / "curvature_boxplot.png"
-    
         try:
-            plot_comprehensive_box_curvature(subj_means, out_path)
-            print(f"[INFO] Saved plot: {out_path}")
+            make_single_subject_plots(df_plot, plots_dir)
+            print(f"[INFO] Plots saved to: {plots_dir}")
+    
         except Exception as e:
             print(f"[WARNING] Plot generation failed: {e}")
             
