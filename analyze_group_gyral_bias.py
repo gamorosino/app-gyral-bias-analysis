@@ -15,6 +15,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.patches import Patch
 from utils import nature_style_plot, save_figure
+from pathlib import Path
+import numpy as np
 
 def plot_curvature_conditions(df, out_dir, title_suffix="", species_map=None):
     """
@@ -146,8 +148,7 @@ def transform_meridians(df, mode, out_dir):
     Transform 'meridian' column and potentially aggregate rows based on the chosen mode.
     Returns transformed df, palette, valid_order, and output subdirectory path.
     """
-    from pathlib import Path
-    import numpy as np
+
 
     # Always make a copy to avoid modifying input df
     df = df.copy()
