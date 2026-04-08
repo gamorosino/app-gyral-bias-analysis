@@ -13,6 +13,7 @@ from dipy.io.stateful_tractogram import StatefulTractogram, Space
 from dipy.io.streamline import save_tck
 from matplotlib import pyplot as plt
 import seaborn as sns
+from utils import save_figure
 
 from analyze_group_gyral_bias import (
     get_meridian_map,
