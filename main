@@ -122,7 +122,7 @@ CMD=(python3 ${SCRIPT_DIR}/analyze_gyral_bias_app.py
   --tcks_dir "$TCKS"
   --lh_curv "$LH_CURV"
   --rh_curv "$RH_CURV"
-  --output_csv ${SCRIPT_DIR}/output/curvature_streamlines.csv
+  --output_csv ${SCRIPT_DIR}/output/tractmeasures.csv
   --visual_area_a "$VISUAL_AREA_A"
   --visual_area_b "$VISUAL_AREA_B"
   --make_plots
