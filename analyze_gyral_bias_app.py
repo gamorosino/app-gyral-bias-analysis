@@ -508,21 +508,21 @@ def main():
     pd.DataFrame(rows).to_csv(output_csv, index=False)
     print(f"[INFO] Wrote {output_csv}")
     
-if args.make_plots:
-    print("[INFO] Generating plots...")
-
-    df_plot = pd.DataFrame(rows).copy()
-    df_plot["subject"] = args.subject_id
-
-    try:
-        make_single_subject_plots(
-            df_plot,
-            args.plots_dir,
-            only_kde=True)
-        
-        print(f"[INFO] Plots saved to: {args.plots_dir}")
-    except Exception as e:
-        print(f"[WARNING] Plot generation failed: {e}")
+    if args.make_plots:
+        print("[INFO] Generating plots...")
+    
+        df_plot = pd.DataFrame(rows).copy()
+        df_plot["subject"] = args.subject_id
+    
+        try:
+            make_single_subject_plots(
+                df_plot,
+                args.plots_dir,
+                only_kde=True)
             
+            print(f"[INFO] Plots saved to: {args.plots_dir}")
+        except Exception as e:
+            print(f"[WARNING] Plot generation failed: {e}")
+                
 if __name__ == "__main__":
     main()
