@@ -388,10 +388,12 @@ def main():
     ap.add_argument("--plots_dir", type=str, default="plots",
                         help="Directory to save plots")
     ap.add_argument(
-    "--meridian_mode",
-    default="HM,VM,LVM,UVM",
-    help="Comma-separated meridians to show in plots, e.g. HM,VM,LVM,UVM")
+                    "--meridian_mode",
+                    default="HM,VM,LVM,UVM",
+                    help="Comma-separated meridians to show in plots, e.g. HM,VM,LVM,UVM")
+    ap.add_argument("--only_kde", action="store_true")
     args = ap.parse_args()
+    
 
     parc = Path(args.parc).resolve()
     label_json = Path(args.label_json).resolve()
