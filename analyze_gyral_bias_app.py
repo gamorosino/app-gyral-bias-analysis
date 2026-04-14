@@ -34,12 +34,79 @@ VAREA_MAP = {
     "LO1": 7, "LO2": 8, "TO1": 9, "TO2": 10, "V3b": 11, "V3a": 12
 }
 
-def make_single_subject_plots(df, plots_dir, only_kde=False):
+
+def parse_plot_meridians(value: str | None) -> list[str]:
+    default = ["HM", "VM", "LVM", "UVM"]
+    if value is None:
+        return default
+    vals = [v.strip().upper() for v in str(value).split(",") if v.strip()]
+    return vals or default
+
+def add_merged_meridians_for_plotting(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Add merged HM and VM rows using the same logic as the group script:
+    sum voxel_count, streamline_count, total_curvature, then recompute
+    mean_curvature and streamline_density.
+    """
+    df = df.copy()
+
+    required = {"parcel_id", "meridian", "eccentricity_bin", "voxel_count", "mean_curvature", "streamline_count"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"Missing columns for merged meridian plotting: {sorted(missing)}")
+
+    df["total_curvature"] = df["mean_curvature"] * df["voxel_count"]
+
+    merged_rows = []
+
+    # HM = LHM + RHM
+    hm_input = df[df["meridian"].isin(["LHM", "RHM"])].copy()
+    if not hm_input.empty:
+        hm = (
+            hm_input.groupby(["eccentricity_bin"], as_index=False)
+            .agg({
+                "voxel_count": "sum",
+                "streamline_count": "sum",
+                "total_curvature": "sum"
+            })
+        )
+        hm["mean_curvature"] = hm["total_curvature"] / hm["voxel_count"]
+        hm["streamline_density"] = hm["streamline_count"] / hm["voxel_count"]
+        hm["meridian"] = "HM"
+        hm["parcel_id"] = np.nan
+        merged_rows.append(hm)
+
+    # VM = LVM + UVM
+    vm_input = df[df["meridian"].isin(["LVM", "UVM"])].copy()
+    if not vm_input.empty:
+        vm = (
+            vm_input.groupby(["eccentricity_bin"], as_index=False)
+            .agg({
+                "voxel_count": "sum",
+                "streamline_count": "sum",
+                "total_curvature": "sum"
+            })
+        )
+        vm["mean_curvature"] = vm["total_curvature"] / vm["voxel_count"]
+        vm["streamline_density"] = vm["streamline_count"] / vm["voxel_count"]
+        vm["meridian"] = "VM"
+        vm["parcel_id"] = np.nan
+        merged_rows.append(vm)
+
+    if merged_rows:
+        merged_df = pd.concat(merged_rows, ignore_index=True)
+        keep_cols = [c for c in df.columns if c in merged_df.columns]
+        merged_df = merged_df.reindex(columns=df.columns, fill_value=np.nan)
+        df = pd.concat([df, merged_df], ignore_index=True)
+
+    return df
+
+
+def make_single_subject_plots(df, plots_dir, only_kde=False, plot_meridians=None):
 
     plots_dir = Path(plots_dir)
     plots_dir.mkdir(parents=True, exist_ok=True)
 
-    # Ensure plotting columns exist
     df = df.copy()
     df["streamline_count"] = df["streamline_count_filtered"]
     df["streamline_density"] = df["streamline_density_filtered"]
@@ -49,11 +116,23 @@ def make_single_subject_plots(df, plots_dir, only_kde=False):
 
     df = df.dropna(subset=["mean_curvature", "streamline_density", "meridian"])
 
+    # add merged HM / VM rows like the group script
+    df = add_merged_meridians_for_plotting(df)
+
+    valid_order = parse_plot_meridians(plot_meridians)
+    df = df[df["meridian"].isin(valid_order)].copy()
+
+    if df.empty:
+        print("[WARNING] No rows available for plotting after meridian filtering")
+        return
+
     palette = {
         "LHM": "#a1d99b",
         "RHM": "#31a354",
+        "HM":  "#2ca02c",
         "LVM": "#fb1209",
         "UVM": "#3182bd",
+        "VM":  "#9467bd",
         "ULO": "#ffcc66",
         "URO": "#ff9933",
         "LLO": "#b64b75",
@@ -379,6 +458,10 @@ def main():
     
     ap.add_argument("--plots_dir", type=str, default="plots",
                         help="Directory to save plots")
+    ap.add_argument(
+    "--plot_meridians",
+    default="HM,VM,LVM,UVM",
+    help="Comma-separated meridians to show in plots, e.g. HM,VM,LVM,UVM")
     args = ap.parse_args()
 
     parc = Path(args.parc).resolve()
@@ -518,7 +601,9 @@ def main():
             make_single_subject_plots(
                 df_plot,
                 args.plots_dir,
-                only_kde=True)
+                only_kde=True,
+                    plot_meridians=args.plot_meridians,
+                )
             
             print(f"[INFO] Plots saved to: {args.plots_dir}")
         except Exception as e:
