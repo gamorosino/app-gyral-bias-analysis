@@ -14,7 +14,7 @@ from dipy.io.streamline import save_tck
 from matplotlib import pyplot as plt
 import seaborn as sns
 from utils import save_figure
-
+from typing import Optional, List
 from analyze_group_gyral_bias import (
     get_meridian_map,
     get_ecc_map,
@@ -35,7 +35,9 @@ VAREA_MAP = {
 }
 
 
-def parse_plot_meridians(value: str | None) -> list[str]:
+
+
+def parse_plot_meridians(value: Optional[str]) -> List[str]:
     default = ["HM", "VM", "LVM", "UVM"]
     if value is None:
         return default
