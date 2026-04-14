@@ -37,7 +37,7 @@ VAREA_MAP = {
 
 
 
-def parse_plot_meridians(value: Optional[str]) -> List[str]:
+def parse_meridian_mode(value: Optional[str]) -> List[str]:
     default = ["HM", "VM", "LVM", "UVM"]
     if value is None:
         return default
@@ -104,8 +104,7 @@ def add_merged_meridians_for_plotting(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def make_single_subject_plots(df, plots_dir, only_kde=False, plot_meridians=None):
-
+def make_single_subject_plots(df, plots_dir, meridian_mode="hm_vm_lvm_uvm", only_kde=False):
     plots_dir = Path(plots_dir)
     plots_dir.mkdir(parents=True, exist_ok=True)
 
@@ -116,41 +115,23 @@ def make_single_subject_plots(df, plots_dir, only_kde=False, plot_meridians=None
     df["meridian"] = df["parcel_id"].map(get_meridian_map())
     df["eccentricity_bin"] = df["parcel_id"].map(get_ecc_map())
 
-    df = df.dropna(subset=["mean_curvature", "streamline_density", "meridian"])
+    df = df.dropna(subset=["mean_curvature", "streamline_density", "meridian"]).copy()
 
-    # add merged HM / VM rows like the group script
-    df = add_merged_meridians_for_plotting(df)
+    # dummy subject column for compatibility with transform_meridians()
+    if "subject" not in df.columns:
+        df["subject"] = "single_subject"
 
-    valid_order = parse_plot_meridians(plot_meridians)
-    df = df[df["meridian"].isin(valid_order)].copy()
-
-    if df.empty:
-        print("[WARNING] No rows available for plotting after meridian filtering")
-        return
-
-    palette = {
-        "LHM": "#a1d99b",
-        "RHM": "#31a354",
-        "HM":  "#2ca02c",
-        "LVM": "#fb1209",
-        "UVM": "#3182bd",
-        "VM":  "#9467bd",
-        "ULO": "#ffcc66",
-        "URO": "#ff9933",
-        "LLO": "#b64b75",
-        "LRO": "#FF007F"
-    }
-
-    valid_order = ["LHM", "RHM", "LVM", "UVM"]
-    df = df[df["meridian"].isin(valid_order)].copy()
+    df, palette, valid_order, _ = transform_meridians(
+        df,
+        mode=meridian_mode,
+        out_dir=plots_dir
+    )
 
     if df.empty:
-        print("[WARNING] No rows available for plotting after meridian filtering")
+        print("[WARNING] No rows available for plotting after meridian transformation")
         return
 
-    # -------------------------------------------------
-    # 0. KDE summary plot
-    # -------------------------------------------------
+    # Main KDE summary plot
     plot_meridian_centroids_x(
         df,
         plots_dir / "centroid_scatter_all_ecc_kde_thr_0.05.png",
@@ -163,98 +144,44 @@ def make_single_subject_plots(df, plots_dir, only_kde=False, plot_meridians=None
     if only_kde:
         return
 
-    # -------------------------------------------------
-    # 1. MAIN SCATTER (density vs curvature)
-    # -------------------------------------------------
-    plt.figure(figsize=(7, 5))
-
-    sns.scatterplot(
-        data=df,
-        x="mean_curvature",
-        y="streamline_density",
-        hue="meridian",
+    # Optional parcel-level scatter
+    plot_scatter_density_vs_curvature(
+        df,
+        plots_dir / "scatter_streamline_density_vs_curvature.png",
         palette=palette,
-        alpha=0.7,
-        edgecolor="none"
+        title_suffix=""
     )
 
-    plt.axhline(0, linestyle="--", color="gray")
-    plt.axvline(0, linestyle="--", color="gray")
-    plt.xlabel("Mean curvature")
-    plt.ylabel("Streamline density")
-    plt.title("Streamline density vs curvature (parcel-level)")
-    plt.tight_layout()
+    # Optional per-eccentricity scatter
+    x_lim, y_lim = plot_scatter_density_vs_curvature_per_ecc(
+        df,
+        plots_dir,
+        palette=palette,
+        meridians=valid_order,
+        y_lim=None,
+        y_from_data=True,
+        y_method="minmax",
+        y_q=0.001,
+        y_pad=0.01,
+        x_lim=None,
+        x_from_data=True,
+        x_method="minmax",
+        x_q=0.001,
+        x_pad=0.01,
+    )
 
-    save_figure(plots_dir / "scatter_streamline_density_vs_curvature.png", dpi=300)
-    plt.close()
-
-    # -------------------------------------------------
-    # 2. SCATTER BY ECCENTRICITY
-    # -------------------------------------------------
-    ecc_order = ["0to2", "2to4", "4to6", "6to8", "8to90"]
-
-    for ecc in ecc_order:
-        sub = df[df["eccentricity_bin"] == ecc]
-        if len(sub) == 0:
-            continue
-
-        plt.figure(figsize=(7, 5))
-
-        sns.scatterplot(
-            data=sub,
-            x="mean_curvature",
-            y="streamline_density",
-            hue="meridian",
-            palette=palette,
-            alpha=0.7,
-            edgecolor="none"
-        )
-
-        plt.axhline(0, linestyle="--", color="gray")
-        plt.axvline(0, linestyle="--", color="gray")
-        plt.xlabel("Mean curvature")
-        plt.ylabel("Streamline density")
-        plt.title(f"Density vs curvature (eccentricity {ecc})")
-        plt.tight_layout()
-
-        save_figure(
-            plots_dir / f"scatter_density_vs_curvature_by_ecc_{ecc}.png",
-            dpi=300
-        )
-        plt.close()
-
-    # -------------------------------------------------
-    # 3. BOXPLOT: curvature by meridian
-    # -------------------------------------------------
-    for ecc in ecc_order:
-        sub = df[df["eccentricity_bin"] == ecc]
-        if len(sub) == 0:
-            continue
-
-        plt.figure(figsize=(7, 5))
-
-        sns.boxplot(
-            data=sub,
-            x="meridian",
-            y="mean_curvature",
-            hue="meridian",
-            palette=palette,
-            showfliers=False,
-            dodge=False,
-            legend=False
-        )
-
-        plt.axhline(0, color="black")
-        plt.xlabel("Meridian")
-        plt.ylabel("Mean curvature")
-        plt.title(f"Curvature distribution by meridian (ecc {ecc})")
-        plt.tight_layout()
-
-        save_figure(
-            plots_dir / f"box_mean_curvature_by_meridian_ecc_{ecc}.png",
-            dpi=300
-        )
-        plt.close()
+    # Optional per-eccentricity boxplot
+    plot_box_curvature_by_meridian_per_ecc(
+        df,
+        plots_dir,
+        palette=palette,
+        meridians=valid_order,
+        y_lim=None,
+        y_from_data=True,
+        y_method="minmax",
+        y_q=0.001,
+        y_pad=0.01
+    )
 
 def load_streamline_count(tck_file: Path) -> int:
     result = subprocess.run(["tckinfo", str(tck_file)], capture_output=True, text=True)
@@ -461,7 +388,7 @@ def main():
     ap.add_argument("--plots_dir", type=str, default="plots",
                         help="Directory to save plots")
     ap.add_argument(
-    "--plot_meridians",
+    "--meridian_mode",
     default="HM,VM,LVM,UVM",
     help="Comma-separated meridians to show in plots, e.g. HM,VM,LVM,UVM")
     args = ap.parse_args()
@@ -603,10 +530,9 @@ def main():
             make_single_subject_plots(
                 df_plot,
                 args.plots_dir,
-                only_kde=True,
-                    plot_meridians=args.plot_meridians,
-                )
-            
+                meridian_mode=args.meridian_mode,
+                only_kde=args.only_kde
+            )
             print(f"[INFO] Plots saved to: {args.plots_dir}")
         except Exception as e:
             print(f"[WARNING] Plot generation failed: {e}")
