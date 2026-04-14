@@ -5,29 +5,33 @@
 
 set -euo pipefail
 set -x
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTAINER_IMAGE="docker://gamorosino/tract_align:v1.0"
-CONFIG=${SCRIPT_DIR}/config.json
-WORK=${SCRIPT_DIR}/work_gyral_bias
+CONFIG="${SCRIPT_DIR}/config.json"
+WORK="${SCRIPT_DIR}/work_gyral_bias"
 
 if [[ ! -f "$CONFIG" ]]; then
-  echo "[ERROR] Missing ./config.json"
+  echo "[ERROR] Missing $CONFIG"
   exit 1
 fi
 
 # Read values from config.json via python and export them for bash
 eval "$(
-python3 - <<'PY'
-import json, shlex
+CONFIG_PATH="$CONFIG" python3 - <<'PY'
+import json, os, shlex
 from pathlib import Path
 
-cfg = json.loads(Path("./config.json").read_text())
+cfg = json.loads(Path(os.environ["CONFIG_PATH"]).read_text())
 
 def get(key, default=""):
     v = cfg.get(key, default)
     if isinstance(v, str) and v.strip() == "":
         return ""
     return v
+
+def get_bool(key, default=False):
+    return bool(cfg.get(key, default))
 
 def get_subject_id(cfg):
     for item in cfg.get("_inputs", []):
@@ -51,16 +55,22 @@ subject_id = get_subject_id(cfg)
 
 visual_area_a = get("visual_area_a")
 visual_area_b = get("visual_area_b")
-roi_order = bool(cfg.get("roi_order", False))
+roi_order = get_bool("roi_order", False)
 parc_vareas = get("parc_vareas")
 
-missing = [k for k,v in [
+# new plotting controls
+make_plots = get_bool("make_plots", True)
+only_kde = get_bool("only_kde", False)
+plot_meridians = get("plot_meridians", "HM,VM,LVM,UVM")
+
+missing = [k for k, v in [
     ("parc", parc),
     ("label", label),
     ("tcks", tcks),
     ("output", fs_output),
     ("subject_id", subject_id),
 ] if not v]
+
 if missing:
     raise SystemExit(f"[ERROR] Missing required config keys: {missing}")
 
@@ -79,16 +89,19 @@ exp("SUBJECT_ID", subject_id)
 exp("VISUAL_AREA_A", visual_area_a)
 exp("VISUAL_AREA_B", visual_area_b)
 exp("PARC_VAREAS", parc_vareas)
+exp("PLOT_MERIDIANS", plot_meridians)
 
 print(f"export ROI_ORDER={'1' if roi_order else '0'}")
+print(f"export MAKE_PLOTS={'1' if make_plots else '0'}")
+print(f"export ONLY_KDE={'1' if only_kde else '0'}")
 PY
 )"
 
 run_in_env() {
-        singularity  exec -e \
-            "${CONTAINER_IMAGE}" \
-                micromamba run -n tract_align "$@"
-    }
+    singularity exec -e \
+        "${CONTAINER_IMAGE}" \
+        micromamba run -n tract_align "$@"
+}
 
 mkdir -p "$WORK/surf2vol"
 
@@ -98,17 +111,17 @@ if [[ -z "${FREESURFER_LICENSE:-}" ]]; then
 fi
 printf "%s\n" "$FREESURFER_LICENSE" > "$WORK/license.txt"
 
-# make sure helper script is available inside the FreeSurfer container
+# Make sure helper script is available inside the FreeSurfer container
 cp "${SCRIPT_DIR}/freesurfer.sh" "$WORK/freesurfer.sh"
 chmod +x "$WORK/freesurfer.sh"
 
 echo "[INFO] Running FreeSurfer mri_surf2vol inside brainlife/freesurfer:7.3.2"
 
-[ -z "$FREESURFER_LICENSE" ] && echo "Please set FREESURFER_LICENSE in .bashrc" && exit 1;
-echo $FREESURFER_LICENSE > license.txt
-
-time singularity   exec -e -B `pwd`/license.txt:/usr/local/freesurfer/license.txt \
-  docker://brainlife/freesurfer:7.3.2 bash "./freesurfer.sh" "$FS_OUTPUT" "$WORK/surf2vol"
+time singularity exec -e \
+  -B "${WORK}/license.txt:/usr/local/freesurfer/license.txt" \
+  -B "${WORK}:/work" \
+  docker://brainlife/freesurfer:7.3.2 \
+  bash /work/freesurfer.sh "$FS_OUTPUT" /work/surf2vol
 
 LH_CURV="$WORK/surf2vol/lh.curv.mgz"
 RH_CURV="$WORK/surf2vol/rh.curv.mgz"
@@ -116,23 +129,32 @@ RH_CURV="$WORK/surf2vol/rh.curv.mgz"
 [[ ! -f "$LH_CURV" ]] && echo "[ERROR] Missing expected $LH_CURV" && exit 1
 [[ ! -f "$RH_CURV" ]] && echo "[ERROR] Missing expected $RH_CURV" && exit 1
 
-CMD=(python3 ${SCRIPT_DIR}/analyze_gyral_bias_app.py
+CMD=(python3 "${SCRIPT_DIR}/analyze_gyral_bias_app.py"
   --parc "$PARC"
   --label_json "$LABEL"
   --tcks_dir "$TCKS"
   --lh_curv "$LH_CURV"
   --rh_curv "$RH_CURV"
-  --output_csv ${SCRIPT_DIR}/output/tractmeasures.csv
+  --output_csv "${SCRIPT_DIR}/output/tractmeasures.csv"
+  --subject_id "$SUBJECT_ID"
+  --plots_dir "${SCRIPT_DIR}/plots"
+  --plot_meridians "$PLOT_MERIDIANS"
   --visual_area_a "$VISUAL_AREA_A"
   --visual_area_b "$VISUAL_AREA_B"
-  --make_plots
-  --subject_id "$SUBJECT_ID"
-  --plots_dir ${SCRIPT_DIR}/plots
 )
+
+if [[ "$MAKE_PLOTS" == "1" ]]; then
+  CMD+=(--make_plots)
+fi
+
+if [[ "$ONLY_KDE" == "1" ]]; then
+  CMD+=(--only_kde)
+fi
 
 if [[ -n "${PARC_VAREAS:-}" ]]; then
   CMD+=(--parc_vareas "$PARC_VAREAS")
 fi
+
 if [[ "$ROI_ORDER" == "1" ]]; then
   CMD+=(--roi_order)
 fi
@@ -140,6 +162,6 @@ fi
 echo "[INFO] Running: ${CMD[*]}"
 run_in_env "${CMD[@]}"
 
-echo "[INFO] Done. Output: /output/curvature_streamlines.csv"
+echo "[INFO] Done. Output: ${SCRIPT_DIR}/output/tractmeasures.csv"
 
-bash ./generate_product_json.sh "${SCRIPT_DIR}/plots/" "${SCRIPT_DIR}/product.json"
+bash "${SCRIPT_DIR}/generate_product_json.sh" "${SCRIPT_DIR}/plots/" "${SCRIPT_DIR}/product.json"
