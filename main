@@ -58,10 +58,10 @@ visual_area_b = get("visual_area_b")
 roi_order = get_bool("roi_order", False)
 parc_vareas = get("parc_vareas")
 
-# new plotting controls
+# plotting controls
 make_plots = get_bool("make_plots", True)
 only_kde = get_bool("only_kde", False)
-plot_meridians = get("plot_meridians", "HM,VM,LVM,UVM")
+meridian_mode = get("meridian_mode", "hm_vm_lvm_uvm")
 
 missing = [k for k, v in [
     ("parc", parc),
@@ -89,7 +89,7 @@ exp("SUBJECT_ID", subject_id)
 exp("VISUAL_AREA_A", visual_area_a)
 exp("VISUAL_AREA_B", visual_area_b)
 exp("PARC_VAREAS", parc_vareas)
-exp("PLOT_MERIDIANS", plot_meridians)
+exp("MERIDIAN_MODE", meridian_mode)
 
 print(f"export ROI_ORDER={'1' if roi_order else '0'}")
 print(f"export MAKE_PLOTS={'1' if make_plots else '0'}")
@@ -129,6 +129,8 @@ RH_CURV="$WORK/surf2vol/rh.curv.mgz"
 [[ ! -f "$LH_CURV" ]] && echo "[ERROR] Missing expected $LH_CURV" && exit 1
 [[ ! -f "$RH_CURV" ]] && echo "[ERROR] Missing expected $RH_CURV" && exit 1
 
+mkdir -p "${SCRIPT_DIR}/output" "${SCRIPT_DIR}/plots"
+
 CMD=(python3 "${SCRIPT_DIR}/analyze_gyral_bias_app.py"
   --parc "$PARC"
   --label_json "$LABEL"
@@ -138,7 +140,7 @@ CMD=(python3 "${SCRIPT_DIR}/analyze_gyral_bias_app.py"
   --output_csv "${SCRIPT_DIR}/output/tractmeasures.csv"
   --subject_id "$SUBJECT_ID"
   --plots_dir "${SCRIPT_DIR}/plots"
-  --plot_meridians "$PLOT_MERIDIANS"
+  --meridian_mode "$MERIDIAN_MODE"
   --visual_area_a "$VISUAL_AREA_A"
   --visual_area_b "$VISUAL_AREA_B"
 )
@@ -164,4 +166,6 @@ run_in_env "${CMD[@]}"
 
 echo "[INFO] Done. Output: ${SCRIPT_DIR}/output/tractmeasures.csv"
 
-bash "${SCRIPT_DIR}/generate_product_json.sh" "${SCRIPT_DIR}/plots/" "${SCRIPT_DIR}/product.json"
+if [[ "$MAKE_PLOTS" == "1" ]]; then
+  bash "${SCRIPT_DIR}/generate_product_json.sh" "${SCRIPT_DIR}/plots/" "${SCRIPT_DIR}/product.json"
+fi
