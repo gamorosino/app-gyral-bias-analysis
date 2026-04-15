@@ -29,6 +29,14 @@ from analyze_group_gyral_bias import (
     plot_meridian_modelling,
 )
 
+from retino_split import (
+    AREA_LABELS,
+    make_subject_patch_mask,
+    extract_visual_area_mask,
+    intersect_masks,
+    run_tckedit_endpoints_in_mask,
+)
+
 VAREA_MAP = {
     "V1": 1, "V2": 2, "V3": 3, "hV4": 4, "VO1": 5, "VO2": 6,
     "LO1": 7, "LO2": 8, "TO1": 9, "TO2": 10, "V3b": 11, "V3a": 12
@@ -380,7 +388,78 @@ def filter_tck_ordered_union_python(
     save_tck(new_sft, str(out_tck), bbox_valid_check=False)
     return out_tck
 
+def derive_tcks_from_whole_tractogram(
+    tractogram: Path,
+    ecc_map: Path,
+    polar_map: Optional[Path],
+    varea_map: Path,
+    ecc_bins: list[str],
+    polar_bins: list[str],
+    out_tcks_dir: Path,
+    out_parc_path: Path,
+    out_label_json: Path,
+):
+    out_tcks_dir.mkdir(parents=True, exist_ok=True)
+    roi_dir = out_tcks_dir.parent / "derived_rois"
+    roi_dir.mkdir(parents=True, exist_ok=True)
 
+    base_img = nib.load(str(varea_map))
+    parc_data = np.zeros(base_img.shape[:3], dtype=np.int32)
+
+    labels = []
+    parcel_id = 1
+
+    for area in AREA_LABELS:
+        area_mask = extract_visual_area_mask(varea_map, area, roi_dir / f"area_{area}.nii.gz")
+
+        for ecc_bin in ecc_bins:
+            for polar_bin in polar_bins:
+                use_polar = str(polar_bin).lower() != "all"
+
+                patch_mask = make_subject_patch_mask(
+                    ecc_map=ecc_map,
+                    ang_map=polar_map if use_polar else None,
+                    ecc_range=ecc_bin,
+                    ang_range=polar_bin if use_polar else None,
+                    out_dir=roi_dir / "patches"
+                )
+
+                suffix = f"{area}_ecc{ecc_bin}" + (f"_polar{polar_bin}" if use_polar else "")
+                roi_mask = intersect_masks(
+                    area_mask,
+                    patch_mask,
+                    roi_dir / f"roi_{parcel_id:03d}_{suffix}.nii.gz"
+                )
+
+                roi_img = nib.load(str(roi_mask))
+                roi_data = np.squeeze(roi_img.get_fdata()) > 0
+
+                if not np.any(roi_data):
+                    continue
+
+                parc_data[roi_data] = parcel_id
+
+                labels.append({
+                    "label": parcel_id,
+                    "name": suffix
+                })
+
+                out_tck = out_tcks_dir / f"track{parcel_id}.tck"
+                run_tckedit_endpoints_in_mask(tractogram, roi_mask, out_tck)
+
+                parcel_id += 1
+
+    nib.save(
+        nib.Nifti1Image(parc_data, base_img.affine, base_img.header),
+        str(out_parc_path)
+    )
+
+    out_label_json.write_text(json.dumps(labels, indent=2))
+
+def parse_bins_arg(spec: str) -> list[str]:
+    vals = [v.strip() for v in str(spec).split(",") if v.strip()]
+    return vals if vals else ["all"]
+    
 def load_label_map(label_json: Path) -> dict[int, str]:
     if not label_json:
         return {}
@@ -398,9 +477,19 @@ def load_label_map(label_json: Path) -> dict[int, str]:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--parc", required=True)
-    ap.add_argument("--label_json", required=True)
-    ap.add_argument("--tcks_dir", required=True)
+    ap.add_argument("--parc", default="")
+    ap.add_argument("--label_json", default="")
+    ap.add_argument("--input_mode", default="precomputed_tcks",
+                choices=["precomputed_tcks", "whole_tractogram"])
+
+    ap.add_argument("--tcks_dir", default="")
+    
+    ap.add_argument("--tractogram", default="")
+    ap.add_argument("--ecc", default="")
+    ap.add_argument("--polar", default="")
+    ap.add_argument("--varea", default="")
+    ap.add_argument("--ecc_bins", default="0_2,2_4,4_6,6_8,8_90")
+    ap.add_argument("--polar_bins", default="all")
     
     # Either provide these (recommended for stand-alone FS step)...
     ap.add_argument("--lh_curv", default="")
@@ -429,14 +518,40 @@ def main():
                     help="Comma-separated meridians to show in plots, e.g. HM,VM,LVM,UVM")
     ap.add_argument("--only_kde", action="store_true")
     args = ap.parse_args()
-    
 
     parc = Path(args.parc).resolve()
     label_json = Path(args.label_json).resolve()
-    tcks_dir = Path(args.tcks_dir).resolve()
     output_csv = Path(args.output_csv).resolve()
     output_csv.parent.mkdir(parents=True, exist_ok=True)
+    
+    if args.input_mode == "precomputed_tcks":
+        if not args.parc.strip():
+            raise SystemExit("[ERROR] input_mode=precomputed_tcks requires --parc")
+        if not args.label_json.strip():
+            raise SystemExit("[ERROR] input_mode=precomputed_tcks requires --label_json")
+        parc = Path(args.parc).resolve()
+        label_json = Path(args.label_json).resolve()
+    else:
+        parc = None
+        label_json = None
+    
+    elif args.input_mode == "whole_tractogram":
+        required = {
+            "tractogram": args.tractogram,
+            "ecc": args.ecc,
+            "varea": args.varea,
+        }
+        missing = [k for k, v in required.items() if not str(v).strip()]
+        if missing:
+            raise SystemExit(f"[ERROR] input_mode=whole_tractogram missing required args: {missing}")
+    
+        tcks_dir = Path("/tmp/work_gyral_bias/derived_tcks").resolve()
+        tcks_dir.mkdir(parents=True, exist_ok=True)
+    
+    else:
+        raise SystemExit(f"[ERROR] Unknown input_mode: {args.input_mode}")
 
+    
     label_map = load_label_map(label_json)
 
     filtering_requested = bool(args.visual_area_a.strip()) or bool(args.visual_area_b.strip()) or bool(args.roi_order)
@@ -447,6 +562,28 @@ def main():
     # prepare curvature
     work = Path("/tmp/work_gyral_bias")
     work.mkdir(parents=True, exist_ok=True)
+
+    if args.input_mode == "whole_tractogram":
+        derived_parc = work / "derived_parc.nii.gz"
+        derived_label_json = work / "derived_label.json"
+    
+        ecc_bins = parse_bins_arg(args.ecc_bins)
+        polar_bins = parse_bins_arg(args.polar_bins)
+    
+        derive_tcks_from_whole_tractogram(
+            tractogram=Path(args.tractogram).resolve(),
+            ecc_map=Path(args.ecc).resolve(),
+            polar_map=Path(args.polar).resolve() if args.polar.strip() else None,
+            varea_map=Path(args.varea).resolve(),
+            ecc_bins=ecc_bins,
+            polar_bins=polar_bins,
+            out_tcks_dir=tcks_dir,
+            out_parc_path=derived_parc,
+            out_label_json=derived_label_json,
+        )
+    
+        parc = derived_parc
+        label_json = derived_label_json
     
     lh_arg = args.lh_curv.strip()
     rh_arg = args.rh_curv.strip()
