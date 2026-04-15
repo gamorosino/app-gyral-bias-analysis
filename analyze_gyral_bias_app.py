@@ -35,7 +35,43 @@ VAREA_MAP = {
 }
 
 
+def normalize_meridian_mode(value):
+    if value is None:
+        return "hm_vm_lvm_uvm"
 
+    v = str(value).strip()
+
+    # direct named modes
+    allowed = {
+        "default",
+        "hm_vm",
+        "hm_lvm_uvm",
+        "hm_vm_lvm_uvm",
+        "hm_rhm_lhm_vm_lvm_uvm",
+        "hm_vm_uro_ulo_lro_llo",
+        "hm_vm_lo_uo",
+        "rhm_lhm_lvm_uvm_uro_ulo_lro_llo",
+        "hm_vm_om",
+        "hm_lvm_uvm_lom_uom",
+    }
+    if v in allowed:
+        return v
+
+    # tolerate comma-separated legacy input
+    parts = [p.strip().upper() for p in v.split(",") if p.strip()]
+    parts_key = ",".join(parts)
+
+    mapping = {
+        "LHM,RHM,LVM,UVM": "default",
+        "HM,VM": "hm_vm",
+        "HM,LVM,UVM": "hm_lvm_uvm",
+        "HM,VM,LVM,UVM": "hm_vm_lvm_uvm",
+    }
+
+    if parts_key in mapping:
+        return mapping[parts_key]
+
+    raise ValueError(f"Unknown mode: {value}")
 
 def parse_meridian_mode(value: Optional[str]) -> List[str]:
     default = ["HM", "VM", "LVM", "UVM"]
@@ -532,7 +568,7 @@ def main():
             make_single_subject_plots(
                 df_plot,
                 args.plots_dir,
-                meridian_mode=args.meridian_mode,
+                meridian_mode=normalize_meridian_mode(args.meridian_mode),
                 only_kde=args.only_kde
             )
             print(f"[INFO] Plots saved to: {args.plots_dir}")
