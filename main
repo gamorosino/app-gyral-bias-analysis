@@ -16,7 +16,6 @@ if [[ ! -f "$CONFIG" ]]; then
   exit 1
 fi
 
-# Read values from config.json via python and export them for bash
 eval "$(
 CONFIG_PATH="$CONFIG" python3 - <<'PY'
 import json, os, shlex
@@ -47,30 +46,53 @@ def get_subject_id(cfg):
                 return str(subj).strip()
     return ""
 
+input_mode = get("input_mode", "precomputed_tcks")
+
+# existing inputs
 parc = get("parc")
 label = get("label")
 tcks = get("tcks")
 fs_output = get("output")
 subject_id = get_subject_id(cfg)
 
+# new whole-tractogram inputs
+tractogram = get("tractogram")
+ecc = get("ecc")
+polar = get("polar")
+varea = get("varea")
+ecc_bins = get("ecc_bins", "0_2,2_4,4_6,6_8,8_90")
+polar_bins = get("polar_bins", "all")
+
 visual_area_a = get("visual_area_a")
 visual_area_b = get("visual_area_b")
 roi_order = get_bool("roi_order", False)
 parc_vareas = get("parc_vareas")
 
-# plotting controls
 make_plots = get_bool("make_plots", True)
 only_kde = get_bool("only_kde", False)
 meridian_mode = get("meridian_mode", "hm_vm_lvm_uvm")
 
-missing = [k for k, v in [
-    ("parc", parc),
-    ("label", label),
-    ("tcks", tcks),
+missing_common = [k for k, v in [
     ("output", fs_output),
     ("subject_id", subject_id),
 ] if not v]
 
+if input_mode == "precomputed_tcks":
+    missing_mode = [k for k, v in [
+        ("parc", parc),
+        ("label", label),
+        ("tcks", tcks),
+    ] if not v]
+elif input_mode == "whole_tractogram":
+    missing_mode = [k for k, v in [
+        ("tractogram", tractogram),
+        ("ecc", ecc),
+        ("varea", varea),
+    ] if not v]
+else:
+    raise SystemExit(f"[ERROR] Unknown input_mode: {input_mode}")
+
+missing = missing_common + missing_mode
 if missing:
     raise SystemExit(f"[ERROR] Missing required config keys: {missing}")
 
@@ -81,9 +103,19 @@ if filtering_requested and not parc_vareas:
 def exp(name, value):
     print(f'export {name}={shlex.quote(str(value))}')
 
+exp("INPUT_MODE", input_mode)
+
 exp("PARC", parc)
 exp("LABEL", label)
 exp("TCKS", tcks)
+
+exp("TRACTOGRAM", tractogram)
+exp("ECC", ecc)
+exp("POLAR", polar)
+exp("VAREA", varea)
+exp("ECC_BINS", ecc_bins)
+exp("POLAR_BINS", polar_bins)
+
 exp("FS_OUTPUT", fs_output)
 exp("SUBJECT_ID", subject_id)
 exp("VISUAL_AREA_A", visual_area_a)
@@ -111,7 +143,6 @@ if [[ -z "${FREESURFER_LICENSE:-}" ]]; then
 fi
 printf "%s\n" "$FREESURFER_LICENSE" > "$WORK/license.txt"
 
-# Make sure helper script is available inside the FreeSurfer container
 cp "${SCRIPT_DIR}/freesurfer.sh" "$WORK/freesurfer.sh"
 chmod +x "$WORK/freesurfer.sh"
 
@@ -132,9 +163,7 @@ RH_CURV="$WORK/surf2vol/rh.curv.mgz"
 mkdir -p "${SCRIPT_DIR}/output" "${SCRIPT_DIR}/plots"
 
 CMD=(python3 "${SCRIPT_DIR}/analyze_gyral_bias_app.py"
-  --parc "$PARC"
-  --label_json "$LABEL"
-  --tcks_dir "$TCKS"
+  --input_mode "$INPUT_MODE"
   --lh_curv "$LH_CURV"
   --rh_curv "$RH_CURV"
   --output_csv "${SCRIPT_DIR}/output/tractmeasures.csv"
@@ -144,6 +173,26 @@ CMD=(python3 "${SCRIPT_DIR}/analyze_gyral_bias_app.py"
   --visual_area_a "$VISUAL_AREA_A"
   --visual_area_b "$VISUAL_AREA_B"
 )
+
+if [[ "$INPUT_MODE" == "precomputed_tcks" ]]; then
+  CMD+=(
+    --parc "$PARC"
+    --label_json "$LABEL"
+    --tcks_dir "$TCKS"
+  )
+elif [[ "$INPUT_MODE" == "whole_tractogram" ]]; then
+  CMD+=(
+    --tractogram "$TRACTOGRAM"
+    --ecc "$ECC"
+    --varea "$VAREA"
+    --ecc_bins "$ECC_BINS"
+    --polar_bins "$POLAR_BINS"
+  )
+
+  if [[ -n "${POLAR:-}" ]]; then
+    CMD+=(--polar "$POLAR")
+  fi
+fi
 
 if [[ "$MAKE_PLOTS" == "1" ]]; then
   CMD+=(--make_plots)
