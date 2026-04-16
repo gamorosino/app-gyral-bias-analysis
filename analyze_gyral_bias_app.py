@@ -442,14 +442,20 @@ def derive_tcks_from_whole_tractogram(
 
                 roi_img = nib.load(str(roi_mask))
                 roi_data = np.squeeze(roi_img.get_fdata()) > 0
-
-                if not np.any(roi_data):
-                    continue
+                
                 if roi_data.shape != parc_data.shape:
-                        roi_img = resample_from_to(roi_img, base_img, order=0)
-                        roi_data = np.squeeze(roi_img.get_fdata()) > 0
+                    print(f"[DEBUG] base_img shape: {base_img.shape}")
+                    print(f"[DEBUG] roi_img shape:  {roi_img.shape}")
+                    print(f"[DEBUG] base affine:\n{base_img.affine}")
+                    print(f"[DEBUG] roi affine:\n{roi_img.affine}")
+                    raise ValueError(
+                        f"ROI/base shape mismatch for {roi_mask.name}: "
+                        f"roi_data.shape={roi_data.shape}, parc_data.shape={parc_data.shape}"
+                    )
+                
                 parc_data[roi_data] = parcel_id
 
+                
                 labels.append({
                     "label": parcel_id,
                     "name": suffix
