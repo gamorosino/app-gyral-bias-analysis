@@ -77,9 +77,9 @@ fs_output = get("output")
 subject_id = get_subject_id(cfg)
 
 # whole-tractogram inputs
-tractogram = get("tractogram")
-ecc = get("ecc")
-polar = get("polar")
+tractogram = get("track")
+ecc = get("eccentricity")
+polar = get("polarAngle")
 varea = get("varea")
 ecc_bins = get("ecc_bins", "0_2,2_4,4_6,6_8,8_90")
 polar_bins = get("polar_bins", "all")
