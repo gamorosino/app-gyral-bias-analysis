@@ -170,6 +170,13 @@ run_in_env() {
         micromamba run -n tract_align "$@"
 }
 
+echo "[DEBUG] INPUT_MODE=$INPUT_MODE"
+echo "[DEBUG] TRACTOGRAM=$TRACTOGRAM"
+echo "[DEBUG] ECC=$ECC"
+echo "[DEBUG] POLAR=$POLAR"
+echo "[DEBUG] VAREA=$VAREA"
+echo "[DEBUG] NORMALIZE=$NORMALIZE"
+
 mkdir -p "$WORK/surf2vol"
 
 if [[ -z "${FREESURFER_LICENSE:-}" ]]; then
