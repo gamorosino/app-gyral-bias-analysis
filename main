@@ -82,7 +82,7 @@ ecc = get("eccentricity")
 polar = get("polarAngle")
 varea = get("varea")
 ecc_bins = get("ecc_bins", "0_2,2_4,4_6,6_8,8_90")
-polar_bins = get("polar_bins", "all")
+polar_bins = get("polar_bins", "0_15,30_60,75_105,120_150,165_180")
 
 visual_area_a = get("visual_area_a")
 visual_area_b = get("visual_area_b")
