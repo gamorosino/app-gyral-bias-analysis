@@ -42,6 +42,35 @@ VAREA_MAP = {
     "LO1": 7, "LO2": 8, "TO1": 9, "TO2": 10, "V3b": 11, "V3a": 12
 }
 
+def build_binary_nonzero_mask(in_img_path: Path, out_path: Path) -> Path:
+    img = nib.load(str(in_img_path))
+    data = np.squeeze(img.get_fdata())
+    mask = (data > 0).astype(np.uint8)
+    nib.save(nib.Nifti1Image(mask, img.affine, img.header), str(out_path))
+    return out_path
+
+def prefilter_tractogram_by_binary_varea(
+    tractogram: Path,
+    varea_map: Path,
+    out_tck: Path,
+    work_dir: Path,
+) -> Path:
+    work_dir.mkdir(parents=True, exist_ok=True)
+
+    binary_varea_mask = work_dir / "temp_varea_binary_mask.nii.gz"
+    build_binary_nonzero_mask(varea_map, binary_varea_mask)
+
+    subprocess.run([
+        "tckedit",
+        str(tractogram),
+        str(out_tck),
+        "-include", str(binary_varea_mask),
+        "-ends_only",
+        "-force",
+    ], check=True)
+
+    return out_tck
+
 def normalize_bin_spec(spec: str) -> str:
     if spec is None:
         return spec
@@ -641,9 +670,16 @@ def main():
         # remove duplicates while preserving order
         seen = set()
         areas_to_use = [a for a in areas_to_use if not (a in seen or seen.add(a))]
-        
-        derive_tcks_from_whole_tractogram(
+        prefiltered_tck = work / "temp_vareas_filtered_track.tck"
+
+        prefilter_tractogram_by_binary_varea(
             tractogram=Path(args.tractogram).resolve(),
+            varea_map=Path(args.varea).resolve(),
+            out_tck=prefiltered_tck,
+            work_dir=work,
+        )
+        derive_tcks_from_whole_tractogram(
+            tractogram=prefiltered_tck,
             ecc_map=Path(args.ecc).resolve(),
             polar_map=Path(args.polar).resolve() if args.polar.strip() else None,
             varea_map=Path(args.varea).resolve(),
