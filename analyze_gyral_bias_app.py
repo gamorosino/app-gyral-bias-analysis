@@ -373,7 +373,7 @@ def filter_tck_ordered_union_python(
     for i, s in enumerate(sl):
         if len(s) < 2:
             continue
-        p0 = s[0]0
+        p0 = s[0]
         p1 = s[-1]
 
         i0, j0, k0 = voxel_of_world(affine, p0)
