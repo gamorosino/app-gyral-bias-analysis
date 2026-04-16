@@ -42,6 +42,25 @@ VAREA_MAP = {
     "LO1": 7, "LO2": 8, "TO1": 9, "TO2": 10, "V3b": 11, "V3a": 12
 }
 
+def sum_streamline_counts(tcks_dir: Path) -> int:
+    total = 0
+    for f in sorted(tcks_dir.glob("*.tck")):
+        total += load_streamline_count(f)
+    return total
+
+def concatenate_tcks_and_count(tcks_dir: Path, out_tck: Path) -> int:
+    tck_files = sorted(tcks_dir.glob("*.tck"))
+
+    if not tck_files:
+        raise RuntimeError(f"No .tck files found in {tcks_dir}")
+
+    subprocess.run(
+        ["tckedit", *map(str, tck_files), str(out_tck), "-force"],
+        check=True
+    )
+
+    return load_streamline_count(out_tck)
+
 def build_binary_nonzero_mask(in_img_path: Path, out_path: Path) -> Path:
     img = nib.load(str(in_img_path))
     data = np.squeeze(img.get_fdata())
@@ -704,7 +723,14 @@ def main():
 
         parc = derived_parc
         label_json = derived_label_json
+    else:
+        if args.normalize:
+      
+            concat_tck = work / "concat_tcks.tck"
+            total_streamlines_for_normalization = sum_streamline_counts(tcks_dir)
 
+    if args.normalize and total_streamlines_for_normalization == 0:
+        raise SystemExit("[ERROR] Normalization denominator is zero")
     label_map = load_label_map(label_json)
     
     lh_arg = args.lh_curv.strip()
@@ -796,8 +822,6 @@ def main():
 
             streamline_count_filtered = load_streamline_count(out_tck)
 
-        streamline_density_filtered = (streamline_count_filtered / parcel_volume) if parcel_volume > 0 else np.nan
-
         streamline_density_filtered = (
             streamline_count_filtered / parcel_volume
             if parcel_volume > 0 else np.nan
@@ -811,6 +835,15 @@ def main():
             )
         else:
             streamline_density_normalized = np.nan
+
+        if args.normalize:
+            streamline_fraction = (
+                streamline_count_filtered / total_streamlines_for_normalization
+                if total_streamlines_for_normalization and total_streamlines_for_normalization > 0
+                else np.nan
+            )
+        else:
+            streamline_fraction = np.nan
         
         rows.append({
             "subject": args.subject_id,
@@ -829,6 +862,7 @@ def main():
             "normalize": bool(args.normalize),
             "normalization_total_streamlines": total_streamlines_for_normalization if args.normalize else np.nan,
             "streamline_density_normalized": streamline_density_normalized,
+            "streamline_fraction": streamline_fraction,
         })
 
     pd.DataFrame(rows).to_csv(output_csv, index=False)
