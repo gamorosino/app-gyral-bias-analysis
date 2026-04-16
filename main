@@ -36,7 +36,7 @@ MERIDIAN_MODE=""
 ROI_ORDER="0"
 MAKE_PLOTS="1"
 ONLY_KDE="0"
-
+NORMALIZE="0"
 EXPORTS="$(
 CONFIG_PATH="$CONFIG" python3 - <<'PY'
 import json, os, shlex
@@ -92,7 +92,8 @@ parc_vareas = get("parc_vareas")
 make_plots = get_bool("make_plots", True)
 only_kde = get_bool("only_kde", False)
 meridian_mode = get("meridian_mode", "hm_vm_lvm_uvm")
-
+normalize = get_bool("normalize", False)
+print(f"export NORMALIZE={'1' if normalize else '0'}")
 missing_common = [k for k, v in [
     ("output", fs_output),
     ("subject_id", subject_id),
@@ -242,6 +243,10 @@ fi
 
 if [[ "$ROI_ORDER" == "1" ]]; then
   CMD+=(--roi_order)
+fi
+
+if [[ "$NORMALIZE" == "1" ]]; then
+  CMD+=(--normalize)
 fi
 
 echo "[INFO] Running: ${CMD[*]}"
