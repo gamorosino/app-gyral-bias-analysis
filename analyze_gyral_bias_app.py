@@ -4,7 +4,7 @@ import os
 import re
 import subprocess
 from pathlib import Path   
-import nibabel as nib
+import nibabel as derive_tcks_from_whole_tractogram
 import numpy as np
 import pandas as pd
 from nibabel.processing import resample_from_to
@@ -309,8 +309,8 @@ def compute_mean_curvature(mask_file: Path, curvature_file: Path):
     return mean_curv, voxel_count, parcel_volume
 
 
-def build_varea_union_mask(varea_for_filtering_path: Path, visual_areas: list[str], out_path: Path) -> Path:
-    img = nib.load(str(varea_for_filtering_path))
+def build_varea_union_mask(parc_vareas_path: Path, visual_areas: list[str], out_path: Path) -> Path:
+    img = nib.load(str(parc_vareas_path))
     data = np.squeeze(np.round(img.get_fdata()).astype(int))
 
     ids = []
@@ -404,7 +404,8 @@ def derive_tcks_from_whole_tractogram(
     roi_dir.mkdir(parents=True, exist_ok=True)
 
     base_img = nib.load(str(varea_map))
-    parc_data = np.zeros(base_img.shape[:3], dtype=np.int32)
+    base_data = np.squeeze(base_img.get_fdata())
+    parc_data = np.zeros(base_data.shape, dtype=np.int32)
 
     labels = []
     parcel_id = 1
