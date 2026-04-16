@@ -187,7 +187,10 @@ def make_single_subject_plots(df, plots_dir, meridian_mode="hm_vm_lvm_uvm", only
 
     df = df.copy()
     df["streamline_count"] = df["streamline_count_filtered"]
-    df["streamline_density"] = df["streamline_density_filtered"]
+    if "normalize" in df.columns and df["normalize"].fillna(False).astype(bool).any():
+        df["streamline_density"] = df["streamline_density_normalized"]
+    else:
+        df["streamline_density"] = df["streamline_density_filtered"]
 
     df["meridian"] = df["parcel_id"].map(get_meridian_map())
     df["eccentricity_bin"] = df["parcel_id"].map(get_ecc_map())
@@ -595,8 +598,10 @@ def main():
                     default="HM,VM,LVM,UVM",
                     help="Comma-separated meridians to show in plots, e.g. HM,VM,LVM,UVM")
     ap.add_argument("--only_kde", action="store_true")
+    ap.add_argument("--normalize", action="store_true",
+                help="Normalize streamline density by total streamlines in the relevant tractogram")
     args = ap.parse_args()
-
+    total_streamlines_for_normalization = None
     parc = Path(args.parc).resolve()
     label_json = Path(args.label_json).resolve()
     output_csv = Path(args.output_csv).resolve()
@@ -678,6 +683,12 @@ def main():
             out_tck=prefiltered_tck,
             work_dir=work,
         )
+
+        if args.normalize:
+            total_streamlines_for_normalization = load_streamline_count(prefiltered_tck)
+            if total_streamlines_for_normalization == 0:
+                raise SystemExit("[ERROR] Prefiltered tractogram has zero streamlines, cannot normalize")
+        
         derive_tcks_from_whole_tractogram(
             tractogram=prefiltered_tck,
             ecc_map=Path(args.ecc).resolve(),
@@ -787,6 +798,20 @@ def main():
 
         streamline_density_filtered = (streamline_count_filtered / parcel_volume) if parcel_volume > 0 else np.nan
 
+        streamline_density_filtered = (
+            streamline_count_filtered / parcel_volume
+            if parcel_volume > 0 else np.nan
+        )
+        
+        if args.normalize:
+            streamline_density_normalized = (
+                streamline_count_filtered / (parcel_volume * total_streamlines_for_normalization)
+                if parcel_volume > 0 and total_streamlines_for_normalization and total_streamlines_for_normalization > 0
+                else np.nan
+            )
+        else:
+            streamline_density_normalized = np.nan
+        
         rows.append({
             "subject": args.subject_id,
             "parcel_id": parcel_id,
@@ -801,6 +826,9 @@ def main():
             "visual_area_a": args.visual_area_a.strip(),
             "visual_area_b": args.visual_area_b.strip(),
             "roi_order": bool(args.roi_order),
+            "normalize": bool(args.normalize),
+            "normalization_total_streamlines": total_streamlines_for_normalization if args.normalize else np.nan,
+            "streamline_density_normalized": streamline_density_normalized,
         })
 
     pd.DataFrame(rows).to_csv(output_csv, index=False)
