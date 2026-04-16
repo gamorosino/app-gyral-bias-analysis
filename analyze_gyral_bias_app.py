@@ -42,11 +42,10 @@ VAREA_MAP = {
     "LO1": 7, "LO2": 8, "TO1": 9, "TO2": 10, "V3b": 11, "V3a": 12
 }
 
-
 def normalize_bin_spec(spec: str) -> str:
-    if not spec:
+    if spec is None:
         return spec
-    return spec.replace("-", "_").replace("to", "_").replace(" ", "")
+    return str(spec).strip().replace("-", "_").replace("to", "_").replace(" ", "")
 
 def normalize_meridian_mode(value):
     if value is None:
@@ -401,6 +400,17 @@ def filter_tck_ordered_union_python(
     save_tck(new_sft, str(out_tck), bbox_valid_check=False)
     return out_tck
 
+
+
+
+def pretty_bin_label(spec: str) -> str:
+    spec = normalize_bin_spec(spec)
+    if spec is None or spec.lower() == "all":
+        return "all"
+    lo, hi = spec.split("_")
+    return f"{lo}to{hi}"
+
+
 def derive_tcks_from_whole_tractogram(
     tractogram: Path,
     ecc_map: Path,
@@ -421,11 +431,18 @@ def derive_tcks_from_whole_tractogram(
     base_data = np.squeeze(base_img.get_fdata())
     parc_data = np.zeros(base_data.shape, dtype=np.int32)
 
+    ecc_bins = [normalize_bin_spec(b) for b in ecc_bins]
+    polar_bins = [normalize_bin_spec(b) for b in polar_bins]
+
     labels = []
     parcel_id = 1
 
     for area in areas_to_use:
-        area_mask = extract_visual_area_mask(varea_map, area, roi_dir / f"area_{area}.nii.gz")
+        area_mask = extract_visual_area_mask(
+            varea_map,
+            area,
+            roi_dir / f"area_{area}.nii.gz"
+        )
 
         for ecc_bin in ecc_bins:
             for polar_bin in polar_bins:
@@ -439,7 +456,13 @@ def derive_tcks_from_whole_tractogram(
                     out_dir=roi_dir / "patches"
                 )
 
-                suffix = f"{area}_ecc{ecc_bin}" + (f"_polar{polar_bin}" if use_polar else "")
+                ecc_label = pretty_bin_label(ecc_bin)
+                if use_polar:
+                    polar_label = pretty_bin_label(polar_bin)
+                    suffix = f"{area}.polarAngle{polar_label}.eccentricity{ecc_label}"
+                else:
+                    suffix = f"{area}.eccentricity{ecc_label}"
+
                 roi_mask = intersect_masks(
                     area_mask,
                     patch_mask,
@@ -448,7 +471,7 @@ def derive_tcks_from_whole_tractogram(
 
                 roi_img = nib.load(str(roi_mask))
                 roi_data = np.squeeze(roi_img.get_fdata()) > 0
-                
+
                 if roi_data.shape != parc_data.shape:
                     print(f"[DEBUG] base_img shape: {base_img.shape}")
                     print(f"[DEBUG] roi_img shape:  {roi_img.shape}")
@@ -458,13 +481,17 @@ def derive_tcks_from_whole_tractogram(
                         f"ROI/base shape mismatch for {roi_mask.name}: "
                         f"roi_data.shape={roi_data.shape}, parc_data.shape={parc_data.shape}"
                     )
-                
+
+                if not np.any(roi_data):
+                    continue
+
                 parc_data[roi_data] = parcel_id
 
-                
                 labels.append({
-                    "label": parcel_id,
-                    "name": suffix
+                    "label": str(parcel_id),
+                    "voxel_value": str(parcel_id),
+                    "name": suffix,
+                    "desc": f"value of {parcel_id} indicates voxel belonging to {suffix}"
                 })
 
                 out_tck = out_tcks_dir / f"track{parcel_id}.tck"
@@ -478,7 +505,6 @@ def derive_tcks_from_whole_tractogram(
     )
 
     out_label_json.write_text(json.dumps(labels, indent=2))
-
 def parse_bins_arg(spec: str) -> list[str]:
     vals = [normalize_bin_spec(v) for v in str(spec).split(",") if v.strip()]
     return vals if vals else ["all"]
