@@ -42,6 +42,38 @@ VAREA_MAP = {
     "LO1": 7, "LO2": 8, "TO1": 9, "TO2": 10, "V3b": 11, "V3a": 12
 }
 
+
+def nice_axis_limits(values, pad=0.05):
+    vals = np.asarray(values)
+    vals = vals[np.isfinite(vals)]
+
+    if len(vals) == 0:
+        return None
+
+    vmin = vals.min()
+    vmax = vals.max()
+
+    # add padding
+    span = vmax - vmin
+    if span == 0:
+        span = abs(vmax) if vmax != 0 else 1.0
+
+    vmin -= span * pad
+    vmax += span * pad
+
+    # compute rounding scale (order of magnitude)
+    scale = 10 ** np.floor(np.log10(max(abs(vmin), abs(vmax))))
+
+    # normalize
+    vmin_n = vmin / scale
+    vmax_n = vmax / scale
+
+    # round nicely
+    vmin_n = np.floor(vmin_n * 10) / 10
+    vmax_n = np.ceil(vmax_n * 10) / 10
+
+    return vmin_n * scale, vmax_n * scale
+
 def sum_streamline_counts(tcks_dir: Path) -> int:
     total = 0
     for f in sorted(tcks_dir.glob("*.tck")):
@@ -231,13 +263,17 @@ def make_single_subject_plots(df, plots_dir, meridian_mode="hm_vm_lvm_uvm", only
         return
 
     # Main KDE summary plot
+    xlim = nice_axis_limits(df["mean_curvature"])
+    ylim = nice_axis_limits(df["streamline_density"])
     plot_meridian_centroids_x(
         df,
         plots_dir / "centroid_scatter_all_ecc_kde_thr_0.05.png",
         palette=palette,
         meridians=valid_order,
         spread_mode="kde",
-        kde_thr=0.05
+        kde_thr=0.05,
+        x_lim=xlim,
+        y_lim=ylim
     )
 
     if only_kde:
