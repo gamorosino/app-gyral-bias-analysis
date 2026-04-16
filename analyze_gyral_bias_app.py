@@ -309,8 +309,8 @@ def compute_mean_curvature(mask_file: Path, curvature_file: Path):
     return mean_curv, voxel_count, parcel_volume
 
 
-def build_varea_union_mask(parc_vareas_path: Path, visual_areas: list[str], out_path: Path) -> Path:
-    img = nib.load(str(parc_vareas_path))
+def build_varea_union_mask(varea_for_filtering_path: Path, visual_areas: list[str], out_path: Path) -> Path:
+    img = nib.load(str(varea_for_filtering_path))
     data = np.round(img.get_fdata()).astype(int)
 
     ids = []
@@ -525,20 +525,20 @@ def main():
     output_csv.parent.mkdir(parents=True, exist_ok=True)
 
     if args.input_mode == "whole_tractogram":
-        varea_for_filtering = Path(args.varea)
+        varea_for_filtering = Path(args.varea).resolve()
     else:
-        varea_for_filtering = Path(args.parc_vareas)
+        varea_for_filtering = Path(args.parc_vareas).resolve()
     
     if args.input_mode == "precomputed_tcks":
         if not args.parc.strip():
             raise SystemExit("[ERROR] input_mode=precomputed_tcks requires --parc")
         if not args.label_json.strip():
             raise SystemExit("[ERROR] input_mode=precomputed_tcks requires --label_json")
+    
         parc = Path(args.parc).resolve()
         label_json = Path(args.label_json).resolve()
-    else:
-        parc = None
-        label_json = None
+    
+        tcks_dir = Path(args.tcks_dir).resolve()
     
     elif args.input_mode == "whole_tractogram":
         required = {
@@ -553,16 +553,22 @@ def main():
         tcks_dir = Path("/tmp/work_gyral_bias/derived_tcks").resolve()
         tcks_dir.mkdir(parents=True, exist_ok=True)
     
+        parc = None
+        label_json = None
+    
     else:
         raise SystemExit(f"[ERROR] Unknown input_mode: {args.input_mode}")
-
     
     label_map = load_label_map(label_json)
 
     filtering_requested = bool(args.visual_area_a.strip()) or bool(args.visual_area_b.strip()) or bool(args.roi_order)
-    parc_vareas = Path(args.parc_vareas).resolve() if args.parc_vareas else None
-    if filtering_requested and not parc_vareas:
-        raise SystemExit("[ERROR] Filtering requested but --parc_vareas not provided")
+    
+    if args.input_mode == "precomputed_tcks":
+        parc_vareas = Path(args.parc_vareas).resolve() if args.parc_vareas else None
+        if filtering_requested and not parc_vareas:
+            raise SystemExit("[ERROR] Filtering requested but --parc_vareas not provided")
+    else:
+        parc_vareas = None  # not used in this mode
 
     # prepare curvature
     work = Path("/tmp/work_gyral_bias")
@@ -628,14 +634,14 @@ def main():
     a_mask = b_mask = union_mask = None
     if filtering_requested:
         a_mask = work / f"mask_{args.visual_area_a}.nii.gz"
-        build_varea_union_mask(parc_vareas, [args.visual_area_a.strip()], a_mask)
+        build_varea_union_mask(varea_for_filtering, [args.visual_area_a.strip()], a_mask)
 
         if args.visual_area_b.strip():
             b_mask = work / f"mask_{args.visual_area_b}.nii.gz"
-            build_varea_union_mask(parc_vareas, [args.visual_area_b.strip()], b_mask)
+            build_varea_union_mask(varea_for_filtering, [args.visual_area_b.strip()], b_mask)
 
             union_mask = work / f"mask_union_{args.visual_area_a}_{args.visual_area_b}.nii.gz"
-            build_varea_union_mask(parc_vareas, [args.visual_area_a.strip(), args.visual_area_b.strip()], union_mask)
+            build_varea_union_mask(varea_for_filtering, [args.visual_area_a.strip(), args.visual_area_b.strip()], union_mask)
         else:
             union_mask = a_mask
 
@@ -672,7 +678,7 @@ def main():
                 if args.roi_order:
                     if a_id is None or b_id is None:
                         raise SystemExit("[ERROR] roi_order requires both visual_area_a and visual_area_b")
-                    filter_tck_ordered_union_python(tck_file, parc_vareas, a_id, b_id, out_tck)
+                    filter_tck_ordered_union_python(tck_file, varea_for_filtering, a_id, b_id, out_tck)
                 else:
                     # unordered A<->B, endpoints must hit both masks
                     filter_tck_unordered(tck_file, a_mask, b_mask, out_tck)
