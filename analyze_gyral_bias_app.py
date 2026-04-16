@@ -3,6 +3,7 @@ import json
 import os
 import re
 import subprocess
+import nibabel as nib
 from pathlib import Path   
 import nibabel as derive_tcks_from_whole_tractogram
 import numpy as np
