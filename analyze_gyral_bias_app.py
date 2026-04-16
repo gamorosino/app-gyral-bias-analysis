@@ -406,6 +406,7 @@ def derive_tcks_from_whole_tractogram(
     out_tcks_dir: Path,
     out_parc_path: Path,
     out_label_json: Path,
+    areas_to_use: list[str],
 ):
     out_tcks_dir.mkdir(parents=True, exist_ok=True)
     roi_dir = out_tcks_dir.parent / "derived_rois"
@@ -418,7 +419,7 @@ def derive_tcks_from_whole_tractogram(
     labels = []
     parcel_id = 1
 
-    for area in AREA_LABELS:
+    for area in areas_to_use:
         area_mask = extract_visual_area_mask(varea_map, area, roi_dir / f"area_{area}.nii.gz")
 
         for ecc_bin in ecc_bins:
@@ -595,7 +596,21 @@ def main():
 
         ecc_bins = parse_bins_arg(args.ecc_bins)
         polar_bins = parse_bins_arg(args.polar_bins)
-
+        
+        areas_to_use = []
+        if args.visual_area_a.strip():
+            areas_to_use.append(args.visual_area_a.strip())
+        if args.visual_area_b.strip():
+            areas_to_use.append(args.visual_area_b.strip())
+        
+        # if neither was provided, fall back to all areas
+        if not areas_to_use:
+            areas_to_use = AREA_LABELS.copy()
+        
+        # remove duplicates while preserving order
+        seen = set()
+        areas_to_use = [a for a in areas_to_use if not (a in seen or seen.add(a))]
+        
         derive_tcks_from_whole_tractogram(
             tractogram=Path(args.tractogram).resolve(),
             ecc_map=Path(args.ecc).resolve(),
@@ -606,6 +621,7 @@ def main():
             out_tcks_dir=tcks_dir,
             out_parc_path=derived_parc,
             out_label_json=derived_label_json,
+            areas_to_use=areas_to_use,
         )
 
         parc = derived_parc
