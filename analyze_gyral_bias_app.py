@@ -523,6 +523,11 @@ def main():
     label_json = Path(args.label_json).resolve()
     output_csv = Path(args.output_csv).resolve()
     output_csv.parent.mkdir(parents=True, exist_ok=True)
+
+    if args.input_mode == "whole_tractogram":
+        varea_for_filtering = Path(args.varea)
+    else:
+        varea_for_filtering = Path(args.parc_vareas)
     
     if args.input_mode == "precomputed_tcks":
         if not args.parc.strip():
