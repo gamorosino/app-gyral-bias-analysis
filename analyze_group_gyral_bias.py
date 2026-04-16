@@ -18,6 +18,26 @@ from utils import nature_style_plot, save_figure
 from pathlib import Path
 import numpy as np
 
+import math
+
+def _nice_step(x):
+    if x <= 0 or not np.isfinite(x):
+        return 1.0
+    exp = math.floor(math.log10(x))
+    frac = x / (10 ** exp)
+
+    if frac <= 1:
+        nice = 1
+    elif frac <= 2:
+        nice = 2
+    elif frac <= 5:
+        nice = 5
+    else:
+        nice = 10
+
+    return nice * (10 ** exp)
+
+
 def plot_curvature_conditions(df, out_dir, title_suffix="", species_map=None):
     """
     Generate bar plots of mean curvature by condition, replicating Figure 3 style.
@@ -1269,6 +1289,54 @@ def make_meridian_eccentricity_cmap(base_color, name="meridian_ecc_cmap"):
     ]
     return LinearSegmentedColormap.from_list(name, colors)
 
+import math
+
+def _nice_step(x):
+    if not np.isfinite(x) or x <= 0:
+        return 1.0
+
+    exp = math.floor(math.log10(x))
+    frac = x / (10 ** exp)
+
+    if frac <= 1:
+        nice = 1
+    elif frac <= 2:
+        nice = 2
+    elif frac <= 5:
+        nice = 5
+    else:
+        nice = 10
+
+    return nice * (10 ** exp)
+
+
+def _nice_axis_limits(series, pad=0.08, zero_floor=False):
+    s = np.asarray(pd.Series(series).dropna(), dtype=float)
+    if s.size == 0:
+        return None
+
+    lo = float(np.min(s))
+    hi = float(np.max(s))
+
+    if np.isclose(lo, hi):
+        span = abs(lo) if lo != 0 else 1.0
+        lo -= 0.1 * span
+        hi += 0.1 * span
+
+    span = hi - lo
+    lo -= pad * span
+    hi += pad * span
+
+    if zero_floor:
+        lo = 0.0
+
+    step = _nice_step((hi - lo) / 4.0)
+
+    lo_nice = math.floor(lo / step) * step
+    hi_nice = math.ceil(hi / step) * step
+
+    return lo_nice, hi_nice
+
 def plot_meridian_centroids_x(
     subj_means,
     out_path,
@@ -1282,6 +1350,12 @@ def plot_meridian_centroids_x(
     ecc_vmin=0.0,
     ecc_vmax=8.0,
     kde_ecc_alpha=0.55,
+    x_lim=None,
+    y_lim=None,
+    x_from_data=True,
+    y_from_data=True,
+    x_pad=0.08,
+    y_pad=0.08,
 ):
     if meridians is None:
         meridians = ["LHM", "RHM", "LVM", "UVM"]
@@ -1291,11 +1365,19 @@ def plot_meridian_centroids_x(
     plt.figure(figsize=(8, 6))
     ax = plt.gca()
 
-    # Fixed plotting limits to match your current style
-    xmin = -0.6
-    xmax = 0.4
-    ymin = 0.0
-    ymax = 1.0
+    # Data-driven limits with nice rounding
+    if x_lim is None and x_from_data:
+        x_lim = _nice_axis_limits(subj_means["mean_curvature"], pad=x_pad, zero_floor=False)
+    if y_lim is None and y_from_data:
+        y_lim = _nice_axis_limits(subj_means["streamline_density"], pad=y_pad, zero_floor=True)
+    
+    if x_lim is None:
+        x_lim = (-0.6, 0.4)
+    if y_lim is None:
+        y_lim = (0.0, 1.0)
+    
+    xmin, xmax = x_lim
+    ymin, ymax = y_lim
 
     # Scaling factor for ellipse
     if spread_mode == 'conf_ellipse':
@@ -1418,26 +1500,37 @@ def plot_meridian_centroids_x(
                 zorder=10
             )
 
+    # reference axes
+    plt.axvline(0, linestyle="--", linewidth=1, color="gray", alpha=0.5)
+    
+    # choose nice ticks
+    if xmin < 0 < xmax:
+        xticks = [xmin, 0, xmax]
+    else:
+        xticks = [xmin, (xmin + xmax) / 2, xmax]
+    
+    yticks = [ymin, (ymin + ymax) / 2, ymax]
+    
+    # decimals adapt a bit to scale
+    x_decimals = 1 if max(abs(xmin), abs(xmax)) < 1 else 2
+    y_decimals = 1 if ymax <= 1 else 2
+    
     ax = nature_style_plot(
         ax,
         xmin=xmin,
         xmax=xmax,
         ymin=ymin,
         ymax=ymax,
-        n_xticks=3,
-        n_yticks=3,
-        x_decimals=2,
-        y_decimals=2,
+        xticks=xticks,
+        yticks=yticks,
         fontsize=16,
-        add_origin_padding=True,
-        pad_fraction=0.05,
-        xticks=[xmin, 0, xmax],
-        yticks=[ymin, ymax/2, ymax]
+        x_decimals=x_decimals,
+        y_decimals=y_decimals,
+        add_origin_padding=False,
+        format_xticklabels=True,
+        format_yticklabels=True
     )
-
-    plt.axvline(0, linestyle="--", linewidth=1, color="gray", alpha=0.5)
-    plt.ylim(0, plt.ylim()[1])
-
+    
     plt.xlabel("Mean curvature")
     plt.ylabel("Streamline density")
 
