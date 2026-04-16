@@ -43,6 +43,11 @@ VAREA_MAP = {
 }
 
 
+def normalize_bin_spec(spec: str) -> str:
+    if not spec:
+        return spec
+    return spec.replace("-", "_").replace("to", "_").replace(" ", "")
+
 def normalize_meridian_mode(value):
     if value is None:
         return "hm_vm_lvm_uvm"
@@ -475,7 +480,7 @@ def derive_tcks_from_whole_tractogram(
     out_label_json.write_text(json.dumps(labels, indent=2))
 
 def parse_bins_arg(spec: str) -> list[str]:
-    vals = [v.strip() for v in str(spec).split(",") if v.strip()]
+    vals = [normalize_bin_spec(v) for v in str(spec).split(",") if v.strip()]
     return vals if vals else ["all"]
     
 def load_label_map(label_json: Path) -> dict[int, str]:
@@ -507,7 +512,7 @@ def main():
     ap.add_argument("--polar", default="")
     ap.add_argument("--varea", default="")
     ap.add_argument("--ecc_bins", default="0_2,2_4,4_6,6_8,8_90")
-    ap.add_argument("--polar_bins", default="all")
+    ap.add_argument("--polar_bins", default="0_15,30_60,75_105,120_150,165_180")
     
     # Either provide these (recommended for stand-alone FS step)...
     ap.add_argument("--lh_curv", default="")
