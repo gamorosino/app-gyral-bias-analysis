@@ -117,20 +117,13 @@ missing = missing_common + missing_mode
 if missing:
     raise SystemExit(f"[ERROR] Missing required config keys: {missing}")
 
-filtering_requested = bool(args.visual_area_a.strip()) or bool(args.visual_area_b.strip()) or bool(args.roi_order)
+filtering_requested = bool(visual_area_a.strip()) or bool(visual_area_b.strip()) or roi_order
 
-if args.input_mode == "precomputed_tcks":
-    parc_vareas = Path(args.parc_vareas).resolve() if args.parc_vareas else None
+if input_mode == "precomputed_tcks":
     if filtering_requested and not parc_vareas:
-        raise SystemExit("[ERROR] input_mode=precomputed_tcks: filtering requested but --parc_vareas not provided")
-else:
-    # whole_tractogram mode uses --varea instead
-    parc_vareas = Path(args.parc_vareas).resolve() if args.parc_vareas else None
+        raise SystemExit("[ERROR] input_mode=precomputed_tcks: filtering requested but parc_vareas is missing")
 
-if args.input_mode == "whole_tractogram":
-    varea_for_filtering = Path(args.varea).resolve()
-else:
-    varea_for_filtering = parc_vareas
+# in whole_tractogram mode → varea is used instead, so no error
 
 def exp(name, value):
     print(f'export {name}={shlex.quote(str(value))}')
