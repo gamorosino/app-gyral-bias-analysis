@@ -354,9 +354,17 @@ def filter_tck_ordered_union_python(
     Keep streamlines that are A->B OR B->A (union), based on first/last point.
     """
     parc_img = nib.load(str(parc_vareas_path))
+
     parc_data = np.round(parc_img.get_fdata()).astype(int)
+    if parc_data.ndim == 4 and parc_data.shape[-1] == 1:
+        parc_data = parc_data[..., 0]
+    elif parc_data.ndim != 3:
+        raise ValueError(f"Unexpected parc_vareas shape: {parc_data.shape}")
+
+    shape = parc_data.shape
+
+
     affine = parc_img.affine
-    shape = parc_data.shape[:3]
 
     sft = load_tck(str(in_tck), reference=str(parc_vareas_path))
     sl = sft.streamlines
@@ -365,7 +373,7 @@ def filter_tck_ordered_union_python(
     for i, s in enumerate(sl):
         if len(s) < 2:
             continue
-        p0 = s[0]
+        p0 = s[0]0
         p1 = s[-1]
 
         i0, j0, k0 = voxel_of_world(affine, p0)
@@ -437,7 +445,9 @@ def derive_tcks_from_whole_tractogram(
 
                 if not np.any(roi_data):
                     continue
-
+                if roi_data.shape != parc_data.shape:
+                        roi_img = resample_from_to(roi_img, base_img, order=0)
+                        roi_data = np.squeeze(roi_img.get_fdata()) > 0
                 parc_data[roi_data] = parcel_id
 
                 labels.append({
@@ -559,8 +569,6 @@ def main():
     
     else:
         raise SystemExit(f"[ERROR] Unknown input_mode: {args.input_mode}")
-    
-    label_map = load_label_map(label_json)
 
     filtering_requested = bool(args.visual_area_a.strip()) or bool(args.visual_area_b.strip()) or bool(args.roi_order)
     
@@ -578,10 +586,10 @@ def main():
     if args.input_mode == "whole_tractogram":
         derived_parc = work / "derived_parc.nii.gz"
         derived_label_json = work / "derived_label.json"
-    
+
         ecc_bins = parse_bins_arg(args.ecc_bins)
         polar_bins = parse_bins_arg(args.polar_bins)
-    
+
         derive_tcks_from_whole_tractogram(
             tractogram=Path(args.tractogram).resolve(),
             ecc_map=Path(args.ecc).resolve(),
@@ -593,9 +601,11 @@ def main():
             out_parc_path=derived_parc,
             out_label_json=derived_label_json,
         )
-    
+
         parc = derived_parc
         label_json = derived_label_json
+
+    label_map = load_label_map(label_json)
     
     lh_arg = args.lh_curv.strip()
     rh_arg = args.rh_curv.strip()
