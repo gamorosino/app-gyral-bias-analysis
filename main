@@ -37,6 +37,7 @@ ROI_ORDER="0"
 MAKE_PLOTS="1"
 ONLY_KDE="0"
 NORMALIZE="0"
+
 EXPORTS="$(
 CONFIG_PATH="$CONFIG" python3 - <<'PY'
 import json, os, shlex
@@ -67,6 +68,9 @@ def get_subject_id(cfg):
                 return str(subj).strip()
     return ""
 
+def exp(name, value):
+    print(f'export {name}={shlex.quote(str(value))}')
+
 input_mode = get("input_mode", "precomputed_tcks")
 
 # existing inputs
@@ -91,9 +95,9 @@ parc_vareas = get("parc_vareas")
 
 make_plots = get_bool("make_plots", True)
 only_kde = get_bool("only_kde", False)
-meridian_mode = get("meridian_mode", "hm_vm_lvm_uvm")
 normalize = get_bool("normalize", False)
-print(f"export NORMALIZE={'1' if normalize else '0'}")
+meridian_mode = get("meridian_mode", "hm_vm_lvm_uvm")
+
 missing_common = [k for k, v in [
     ("output", fs_output),
     ("subject_id", subject_id),
@@ -124,11 +128,6 @@ if input_mode == "precomputed_tcks":
     if filtering_requested and not parc_vareas:
         raise SystemExit("[ERROR] input_mode=precomputed_tcks: filtering requested but parc_vareas is missing")
 
-# in whole_tractogram mode → varea is used instead, so no error
-
-def exp(name, value):
-    print(f'export {name}={shlex.quote(str(value))}')
-
 exp("INPUT_MODE", input_mode)
 
 exp("PARC", parc)
@@ -152,6 +151,7 @@ exp("MERIDIAN_MODE", meridian_mode)
 print(f"export ROI_ORDER={'1' if roi_order else '0'}")
 print(f"export MAKE_PLOTS={'1' if make_plots else '0'}")
 print(f"export ONLY_KDE={'1' if only_kde else '0'}")
+print(f"export NORMALIZE={'1' if normalize else '0'}")
 PY
 )" || {
   echo "[ERROR] Failed to parse config.json"
