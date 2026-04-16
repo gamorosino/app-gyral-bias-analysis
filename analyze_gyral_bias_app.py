@@ -271,7 +271,7 @@ def run_surf2vol(freesurfer_dir: Path, hemi: str, output_dir: Path) -> Path:
 def unpack_segmentation(segmentation_file: Path, output_folder: Path, base_name: str = "parc"):
     output_folder.mkdir(parents=True, exist_ok=True)
     img = nib.load(str(segmentation_file))
-    data = np.round(img.get_fdata()).astype(int)
+    data = np.squeeze(np.round(img.get_fdata()).astype(int))
     labels = np.unique(data)
     for lab in labels:
         if lab == 0:
@@ -311,7 +311,7 @@ def compute_mean_curvature(mask_file: Path, curvature_file: Path):
 
 def build_varea_union_mask(varea_for_filtering_path: Path, visual_areas: list[str], out_path: Path) -> Path:
     img = nib.load(str(varea_for_filtering_path))
-    data = np.round(img.get_fdata()).astype(int)
+    data = np.squeeze(np.round(img.get_fdata()).astype(int))
 
     ids = []
     for a in visual_areas:
