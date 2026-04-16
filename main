@@ -16,7 +16,28 @@ if [[ ! -f "$CONFIG" ]]; then
   exit 1
 fi
 
-eval "$(
+# initialize vars so set -u never explodes on unset names
+INPUT_MODE=""
+PARC=""
+LABEL=""
+TCKS=""
+TRACTOGRAM=""
+ECC=""
+POLAR=""
+VAREA=""
+ECC_BINS=""
+POLAR_BINS=""
+FS_OUTPUT=""
+SUBJECT_ID=""
+VISUAL_AREA_A=""
+VISUAL_AREA_B=""
+PARC_VAREAS=""
+MERIDIAN_MODE=""
+ROI_ORDER="0"
+MAKE_PLOTS="1"
+ONLY_KDE="0"
+
+EXPORTS="$(
 CONFIG_PATH="$CONFIG" python3 - <<'PY'
 import json, os, shlex
 from pathlib import Path
@@ -55,7 +76,7 @@ tcks = get("tcks")
 fs_output = get("output")
 subject_id = get_subject_id(cfg)
 
-# new whole-tractogram inputs
+# whole-tractogram inputs
 tractogram = get("tractogram")
 ecc = get("ecc")
 polar = get("polar")
@@ -127,7 +148,16 @@ print(f"export ROI_ORDER={'1' if roi_order else '0'}")
 print(f"export MAKE_PLOTS={'1' if make_plots else '0'}")
 print(f"export ONLY_KDE={'1' if only_kde else '0'}")
 PY
-)"
+)" || {
+  echo "[ERROR] Failed to parse config.json"
+  exit 1
+}
+
+eval "$EXPORTS"
+
+: "${FS_OUTPUT:?ERROR: FS_OUTPUT was not set (missing 'output' in config.json)}"
+: "${SUBJECT_ID:?ERROR: SUBJECT_ID was not set}"
+: "${INPUT_MODE:?ERROR: INPUT_MODE was not set}"
 
 run_in_env() {
     singularity exec -e \
