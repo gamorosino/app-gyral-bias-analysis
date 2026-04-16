@@ -4,15 +4,19 @@ import nibabel as nib
 import numpy as np
 import subprocess
 
-AREA_LABELS = ["V1","V2","V3","hV4","VO1","VO2","LO1","LO2","TO1","TO2","V3b","V3a"]
+AREA_LABELS = ["V1", "V2", "V3", "hV4", "VO1", "VO2", "LO1", "LO2", "TO1", "TO2", "V3b", "V3a"]
+
 
 def subject_threshold_map(base_map: Path, low: float, high: float, var_type=None):
     img = nib.load(str(base_map))
-    data = img.get_fdata()
+    data = np.squeeze(img.get_fdata())
+
     if var_type == "angle":
         data = np.abs(data)
+
     mask = (data >= low) & (data <= high)
     return mask.astype(np.uint8), img
+
 
 def make_subject_patch_mask(
     ecc_map: Path,
@@ -42,29 +46,35 @@ def make_subject_patch_mask(
     ecc_data = np.squeeze(ecc_img.get_fdata())
 
     if ecc_is_all and ang_is_all:
-        roi = np.ones_like(ecc_data, dtype=np.uint8)
+        roi = np.ones(ecc_data.shape, dtype=np.uint8)
         nib.save(nib.Nifti1Image(roi, ecc_img.affine, ecc_img.header), str(out))
         return out
 
     if ecc_is_all:
-        ecc_mask = np.ones_like(ecc_data, dtype=bool)
+        ecc_mask = np.ones(ecc_data.shape, dtype=bool)
     else:
         ecc_low, ecc_high = map(float, str(ecc_range).split("_"))
         ecc_mask, _ = subject_threshold_map(ecc_map, ecc_low, ecc_high)
-        ecc_mask = ecc_mask > 0
+        ecc_mask = np.squeeze(ecc_mask) > 0
 
     if ang_is_all:
-        ang_mask = np.ones_like(ecc_data, dtype=bool)
+        ang_mask = np.ones(ecc_data.shape, dtype=bool)
     else:
         if ang_map is None:
             raise ValueError("ang_map is required when ang_range is not None/'all'")
         ang_low, ang_high = map(float, str(ang_range).split("_"))
         ang_mask, _ = subject_threshold_map(ang_map, ang_low, ang_high, var_type="angle")
-        ang_mask = ang_mask > 0
+        ang_mask = np.squeeze(ang_mask) > 0
+
+    if ecc_mask.shape != ecc_data.shape:
+        raise ValueError(f"ecc_mask shape {ecc_mask.shape} does not match ecc_data shape {ecc_data.shape}")
+    if ang_mask.shape != ecc_data.shape:
+        raise ValueError(f"ang_mask shape {ang_mask.shape} does not match ecc_data shape {ecc_data.shape}")
 
     roi = (ecc_mask & ang_mask).astype(np.uint8)
     nib.save(nib.Nifti1Image(roi, ecc_img.affine, ecc_img.header), str(out))
     return out
+
 
 def extract_visual_area_mask(varea_img: Path, area_name: str, out_path: Path) -> Path:
     if out_path.exists():
@@ -75,19 +85,27 @@ def extract_visual_area_mask(varea_img: Path, area_name: str, out_path: Path) ->
 
     val = AREA_LABELS.index(area_name) + 1
     img = nib.load(str(varea_img))
-    data = np.round(img.get_fdata()).astype(int)
+    data = np.squeeze(np.round(img.get_fdata()).astype(int))
     mask = (data == val).astype(np.uint8)
+
     nib.save(nib.Nifti1Image(mask, img.affine, img.header), str(out_path))
     return out_path
+
 
 def intersect_masks(mask_a: Path, mask_b: Path, out_path: Path) -> Path:
     img_a = nib.load(str(mask_a))
     img_b = nib.load(str(mask_b))
+
     a = np.squeeze(img_a.get_fdata()) > 0
     b = np.squeeze(img_b.get_fdata()) > 0
+
+    if a.shape != b.shape:
+        raise ValueError(f"Mask shape mismatch in intersect_masks: {mask_a} {a.shape} vs {mask_b} {b.shape}")
+
     out = (a & b).astype(np.uint8)
     nib.save(nib.Nifti1Image(out, img_a.affine, img_a.header), str(out_path))
     return out_path
+
 
 def run_tckedit_endpoints_in_mask(in_tck: Path, mask: Path, out_tck: Path):
     subprocess.run([
